@@ -1,20 +1,23 @@
-name: Sync to Hugging Face hub
+name: Sync to Hugging Face Hub
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   sync-to-hub:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           lfs: true
 
-      # ADD THIS STEP FIRST
-      - name: Check token
+      - name: Validate HF token
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -22,12 +25,20 @@ jobs:
             echo "ERROR: HF_TOKEN is empty"
             exit 1
           else
-            echo "Token is set, length: ${#HF_TOKEN}"
+            echo "HF token is set"
           fi
 
-      - name: Push to Hugging Face
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git config --global user.name "github-actions"
+
+      - name: Add Hugging Face remote
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push https://theyadavvivek:$HF_TOKEN@huggingface.co/spaces/theyadavvivek/Search_Engine_llm main
+          git remote add hf https://theyadavvivek:$HF_TOKEN@huggingface.co/spaces/theyadavvivek/Search_Engine_llm
+
+      - name: Push to Hugging Face (force sync)
+        run: |
           git push hf main --force
