@@ -732,7 +732,6 @@ if run_search:
         dag_graph_container = st.empty()
 
     with col_report_canvas:
-        st.markdown("### 📄 Synthesis Canvas")
         report_status_container = st.empty()
 
     # 1. Create DAG
@@ -844,32 +843,6 @@ Guidelines:
         )
 
         st.markdown(answer)
-
-        st.divider()
-
-        # 1-Click Download Report Button
-        report_export_text = f"""# Research Report: {query}
-
-**Mode:** {search_mode}
-**Model:** {model_name} ({provider})
-
----
-
-{answer}
-
----
-
-## Appendix: DAG Node Outputs
-
-{combined_results}
-"""
-        st.download_button(
-            label="📥 Download Report (.md)",
-            data=report_export_text,
-            file_name=f"research_report_{query[:20].strip().replace(' ', '_')}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
 
     # Left Column: Add Expandable Detailed Inspection
     with col_dag_canvas:
