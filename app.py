@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain.agents import AgentType, initialize_agent
+from langchain_classic.agents import AgentType, initialize_agent
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain_community.tools import ArxivQueryRun, DuckDuckGoSearchRun, WikipediaQueryRun
 from langchain_community.utilities import ArxivAPIWrapper, WikipediaAPIWrapper
@@ -60,7 +60,7 @@ if prompt:
     # Build LLM (lightweight object — recreated only when key changes)
     llm = ChatGroq(
         groq_api_key=api_key,
-        model_name="llama-3.3-70b-versatile",
+        model_name="openai/gpt-oss-20b",
         streaming=True,
     )
 
