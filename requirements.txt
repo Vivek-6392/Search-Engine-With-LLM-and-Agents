@@ -9,6 +9,7 @@ langchain-groq
 
 wikipedia
 arxiv
+yfinance
 
 ddgs>=1.0.0
 tavily-python
