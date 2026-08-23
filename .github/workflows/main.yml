@@ -1,44 +1,46 @@
-name: Sync to Hugging Face Hub
+name: CI
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
+      - feature/**
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  sync-to-hub:
+  test:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.11"
+
     steps:
+
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-          lfs: true
+          python-version: ${{ matrix.python-version }}
 
-      - name: Validate HF token
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: Upgrade pip
         run: |
-          if [ -z "${HF_TOKEN}" ]; then
-            echo "ERROR: HF_TOKEN is empty"
-            exit 1
-          else
-            echo "HF token is set"
-          fi
+          python -m pip install --upgrade pip
 
-      - name: Configure Git
+      - name: Install dependencies
         run: |
-          git config --global user.email "github-actions@users.noreply.github.com"
-          git config --global user.name "github-actions"
+          pip install -r requirements.txt
 
-      - name: Add Hugging Face remote
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: Install Playwright browser
         run: |
-          git remote add hf https://theyadavvivek:$HF_TOKEN@huggingface.co/spaces/theyadavvivek/Search_Engine_llm
+          playwright install --with-deps chromium
 
-      - name: Push to Hugging Face (force sync)
+      - name: Check Python syntax
         run: |
-          git push hf main --force
+          python -m compileall .
