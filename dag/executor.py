@@ -171,6 +171,11 @@ Instructions:
                                 clean_name = t_name.replace("_tool", "").replace("_", " ")
                                 if clean_name not in tools_used:
                                     tools_used.append(clean_name)
+
+                    if "agent stopped" in output_text.lower() and steps:
+                        obs_texts = [str(step[1]) for step in steps if isinstance(step, (list, tuple)) and len(step) > 1]
+                        if obs_texts:
+                            output_text = "\n\n".join(obs_texts)
                 else:
                     output_text = str(response)
 

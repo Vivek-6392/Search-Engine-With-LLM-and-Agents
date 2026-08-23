@@ -646,8 +646,7 @@ agent = AgentExecutor(
     tools=tools,
     verbose=False,
     handle_parsing_errors=True,
-    max_iterations=4,
-    early_stopping_method="generate",
+    max_iterations=5,
     return_intermediate_steps=True,
 )
 
