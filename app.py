@@ -733,17 +733,22 @@ if run_search:
             st.progress(done / total if total else 0.0)
 
     def render_dag():
-        dag_graph_container.markdown(
-            render_dag_graph(dag, node_statuses), unsafe_allow_html=True
-        )
+        html_code = render_dag_graph(dag, node_statuses)
+        if hasattr(dag_graph_container, "html"):
+            dag_graph_container.html(html_code)
+        else:
+            dag_graph_container.markdown(html_code, unsafe_allow_html=True)
 
     render_progress()
     render_dag()
 
-    # Show a shimmer skeleton in the synthesis panel while nodes run,
-    # instead of leaving it visually empty behind a spinner caption.
+    # Show a shimmer skeleton in the synthesis panel while nodes run
     with report_status_container:
-        st.markdown(render_synthesis_skeleton(), unsafe_allow_html=True)
+        skeleton_html = render_synthesis_skeleton()
+        if hasattr(st, "html"):
+            st.html(skeleton_html)
+        else:
+            st.markdown(skeleton_html, unsafe_allow_html=True)
 
     # Progress updater
     def update_progress(node, status):
@@ -761,20 +766,37 @@ if run_search:
         [f"### {node_id}\n\n{result}" for node_id, result in results.items()]
     )
 
+    # Dynamic length guidance based on research mode & query intent
+    if mode_key == "fast":
+        length_guideline = """
+- **Concise & Direct**: Keep your answer crisp, clear, and to the point (1-3 focused paragraphs or succinct key points). Answer the user's specific question directly without unnecessary filler.
+"""
+    elif mode_key == "academic":
+        length_guideline = """
+- **Academic Depth**: Provide a detailed literature synthesis with research findings, methodology context, and paper citations.
+"""
+    else:
+        length_guideline = """
+- **Adaptive Length**: Match the depth to the question. For simple or definition questions (e.g. "what is X", "who won Y"), provide a clear, concise 2-3 paragraph answer. For complex or multi-dimensional questions, provide a thorough, structured breakdown.
+"""
+
     final_prompt = f"""
-You are the lead research synthesizer.
+You are an intelligent AI research assistant synthesizing findings for a user query.
 
 User Query:
-{query}
+"{query}"
+
+Research Mode: {search_mode}
 
 Research Findings from DAG nodes:
 {combined_results}
 
-Generate a clear, authoritative, and well-structured research report responding directly to the user's query.
-- Use clear markdown headings, bullet points, and callout sections.
-- Synthesize findings across all nodes without repeating raw logs.
-- Include source citations and URLs where available.
-- Ensure accuracy and clarity.
+Guidelines:
+1. **Direct Answer First**: Begin immediately with the direct, definitive answer in the opening paragraph.
+2. {length_guideline.strip()}
+3. **Adaptive Proportionality**: Do NOT write an overly long mega-report for short, simple, or definition questions. Make the response length natural and appropriate to the question asked.
+4. **Natural Sources & Hyperlinks**: Seamlessly embed markdown links (e.g., [vLLM GitHub](https://github.com/vllm-project/vllm)) when citing sources or facts.
+5. **No Meta-Talk**: Never mention "DAG nodes", "internal tasks", or execution logs.
 """
 
     with report_status_container:
