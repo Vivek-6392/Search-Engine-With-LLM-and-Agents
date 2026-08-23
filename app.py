@@ -518,22 +518,24 @@ from utils.tools import (
     search_finance,
     search_pubmed,
     python_calculator,
+    search_huggingface,
+    search_hackernews,
+    search_stackoverflow,
+    search_academic_papers,
+    search_weather,
+    lookup_package,
+    convert_forex,
 )
 
 from langchain_core.tools import tool
 
 # --------------------------------------------------
-# Wikipedia Tool
+# Wikipedia & Arxiv APIs
 # --------------------------------------------------
 
 wikipedia = WikipediaQueryRun(
     api_wrapper=WikipediaAPIWrapper()
 )
-
-
-# --------------------------------------------------
-# Arxiv Tool
-# --------------------------------------------------
 
 arxiv = ArxivQueryRun(
     api_wrapper=ArxivAPIWrapper()
@@ -541,12 +543,12 @@ arxiv = ArxivQueryRun(
 
 
 # --------------------------------------------------
-# 8-Tool Specialized Suite with Explicit Typed Schemas
+# Full Specialized Multi-Domain Tool Suite
 # --------------------------------------------------
 
 @tool
 def web_search_tool(query: str) -> str:
-    """Search the web for current information, live facts, scores, weather, and breaking news."""
+    """Search the live web for current information, live facts, news, and real-time updates."""
     return web_search(query)
 
 
@@ -561,7 +563,7 @@ def wikipedia_tool(query: str) -> str:
 
 @tool
 def arxiv_tool(query: str) -> str:
-    """Search arXiv for scientific papers, AI/ML research, physics, mathematics, and academic computer science."""
+    """Search arXiv for physics, mathematics, and AI/ML academic preprint papers."""
     try:
         return str(arxiv.run(query))
     except Exception as e:
@@ -569,15 +571,9 @@ def arxiv_tool(query: str) -> str:
 
 
 @tool
-def github_search_tool(query: str) -> str:
-    """Search GitHub for top repositories, code libraries, star counts, descriptions, and open-source tools (e.g. vLLM, PyTorch, LangChain)."""
-    return search_github(query)
-
-
-@tool
-def finance_tool(query: str) -> str:
-    """Fetch real-time stock prices, crypto prices, market caps, currency valuations, and financial summaries. Input should be a ticker symbol (NVDA, AAPL, BTC-USD, TSLA) or company name."""
-    return search_finance(query)
+def academic_papers_tool(query: str) -> str:
+    """Search OpenAlex global academic repository (250M+ papers) across science, medicine, engineering, and humanities."""
+    return search_academic_papers(query)
 
 
 @tool
@@ -587,8 +583,56 @@ def pubmed_tool(query: str) -> str:
 
 
 @tool
+def github_search_tool(query: str) -> str:
+    """Search GitHub for top repositories, code libraries, star counts, descriptions, and open-source tools."""
+    return search_github(query)
+
+
+@tool
+def huggingface_tool(query: str) -> str:
+    """Search Hugging Face Hub for top open-source AI models, LLM weights (GGUF, safetensors), and datasets."""
+    return search_huggingface(query)
+
+
+@tool
+def stackoverflow_tool(query: str) -> str:
+    """Search Stack Overflow for programming errors, bug fixes, and accepted code solutions."""
+    return search_stackoverflow(query)
+
+
+@tool
+def hackernews_tool(query: str) -> str:
+    """Search Y Combinator Hacker News for tech debates, startup discussions, and community opinions."""
+    return search_hackernews(query)
+
+
+@tool
+def package_lookup_tool(package_name: str) -> str:
+    """Lookup package details, latest versions, and licenses for Python (PyPI) and Node.js (NPM) libraries."""
+    return lookup_package(package_name)
+
+
+@tool
+def finance_tool(query: str) -> str:
+    """Fetch real-time stock prices, crypto prices, market caps, currency valuations, and financial summaries."""
+    return search_finance(query)
+
+
+@tool
+def forex_tool(query: str) -> str:
+    """Fetch live foreign exchange rates between fiat currencies (e.g. USD, EUR, INR, GBP, JPY)."""
+    return convert_forex(query)
+
+
+@tool
+def weather_tool(location: str) -> str:
+    """Fetch current real-time weather conditions, temperature, humidity, and forecasts for any city."""
+    return search_weather(location)
+
+
+@tool
 def calculator_tool(expression: str) -> str:
-    """Evaluate exact mathematical calculations, formula computations, and unit conversions. Examples: '2+2', 'sqrt(144) * 12', '1500 * (1+0.08)**5'."""
+    """Evaluate exact mathematical calculations, formula computations, and unit conversions (e.g., '2+2', 'sqrt(144) * 12')."""
     return python_calculator(expression)
 
 
@@ -602,9 +646,16 @@ tools = [
     web_search_tool,
     wikipedia_tool,
     arxiv_tool,
-    github_search_tool,
-    finance_tool,
+    academic_papers_tool,
     pubmed_tool,
+    github_search_tool,
+    huggingface_tool,
+    stackoverflow_tool,
+    hackernews_tool,
+    package_lookup_tool,
+    finance_tool,
+    forex_tool,
+    weather_tool,
     calculator_tool,
     web_browser_tool,
 ]
@@ -618,16 +669,23 @@ agent_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You are an expert AI research agent equipped with 8 specialized tools: "
-            "(web_search_tool, wikipedia_tool, arxiv_tool, github_search_tool, finance_tool, pubmed_tool, calculator_tool, web_browser_tool). "
+            "You are an expert AI research agent equipped with specialized domain tools: "
+            "(web_search_tool, wikipedia_tool, arxiv_tool, academic_papers_tool, pubmed_tool, "
+            "github_search_tool, huggingface_tool, stackoverflow_tool, hackernews_tool, "
+            "package_lookup_tool, finance_tool, forex_tool, weather_tool, calculator_tool, web_browser_tool). "
             "Select the most appropriate tool for the task: "
-            "- For arithmetic, math formulas, equations, or numbers (e.g. 2+2): use `calculator_tool`. "
-            "- For open-source code/repos: use `github_search_tool`. "
-            "- For stock/crypto prices: use `finance_tool`. "
-            "- For medical/health topics: use `pubmed_tool`. "
-            "- For academic papers: use `arxiv_tool`. "
-            "- For general facts/news/weather: use `web_search_tool`. "
-            "- For encyclopedic overviews: use `wikipedia_tool`. "
+            "- For arithmetic/math: `calculator_tool`. "
+            "- For weather/temperature: `weather_tool`. "
+            "- For stock/crypto prices: `finance_tool`. "
+            "- For currency rates: `forex_tool`. "
+            "- For code errors/debugging: `stackoverflow_tool`. "
+            "- For open-source repos: `github_search_tool`. "
+            "- For AI models/weights: `huggingface_tool`. "
+            "- For tech news/opinions: `hackernews_tool`. "
+            "- For package versions: `package_lookup_tool`. "
+            "- For scientific/academic papers: `arxiv_tool` or `academic_papers_tool`. "
+            "- For medical/biotech topics: `pubmed_tool`. "
+            "- For general facts/news: `web_search_tool` or `wikipedia_tool`. "
             "Always include concrete facts, numbers, and source URLs when available.",
         ),
         ("human", "{input}"),
