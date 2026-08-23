@@ -877,19 +877,6 @@ Guidelines:
     report_status_container.empty()
 
     with col_report_canvas:
-        # Notion-style query callout
-        st.markdown(
-            f"""
-            <div class="notion-callout">
-                <div class="notion-callout-icon">📌</div>
-                <div class="notion-callout-text">
-                    <strong>Research Query:</strong> {query}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
         st.markdown(answer)
 
     # Left Column: Add Expandable Detailed Inspection
