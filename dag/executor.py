@@ -140,9 +140,10 @@ Context from completed dependency nodes:
 {context if context else "No dependency context."}
 
 Instructions:
-- If the dependency context already contains sufficient details to fulfill the task, summarize and answer directly without redundant searches.
-- Otherwise, use the available search and browser tools to research the task.
-- Return a concise but useful research result with important facts and source URLs.
+- If the dependency context already contains sufficient details to fulfill the task, synthesize and answer directly.
+- If the task asks for live, current, real-time data (like current weather, scores, dates, or latest events), you MUST use `web_search` to find real-time facts.
+- Do NOT output disclaimers claiming lack of live access or APIs. You have live tools (`web_search`, `web_browser`).
+- Return a concise, factual research result with concrete findings, numbers, and source URLs.
 """
 
         max_retries = 3

@@ -37,6 +37,8 @@ from dag import (
     DAGExecutor,
     ChatOllama,
     get_ollama_models,
+    render_dag_graph,
+    render_synthesis_skeleton,
 )
 
 from browser import browse_webpage
@@ -645,13 +647,17 @@ st.markdown(
 col_mode, col_space = st.columns([2.5, 1])
 
 with col_mode:
-    search_mode = st.radio(
+    search_mode = st.segmented_control(
         "Research Mode",
         ["⚡ Fast / Overview", "🔬 Deep Research", "🎓 Academic Literature"],
-        index=1,
-        horizontal=True,
+        default="🔬 Deep Research",
         label_visibility="collapsed",
     )
+    # segmented_control is deselectable by default (returns None) unless
+    # your Streamlit version supports required=True - fall back explicitly
+    # so an accidental un-click doesn't silently break mode_key below.
+    if search_mode is None:
+        search_mode = "🔬 Deep Research"
 
 mode_key = "deep"
 if "Fast" in search_mode:
@@ -687,7 +693,8 @@ if run_search:
 
     with col_dag_canvas:
         st.markdown("### 🧠 Research DAG Flow")
-        dag_card_container = st.empty()
+        progress_container = st.empty()
+        dag_graph_container = st.empty()
 
     with col_report_canvas:
         st.markdown("### 📄 Synthesis Canvas")
@@ -698,41 +705,38 @@ if run_search:
         with st.spinner("Planning research graph..."):
             dag = planner.create_dag(query, mode=mode_key)
 
-    # 2. Render initial DAG Cards
+    # 2. Render initial DAG graph + progress bar
     node_statuses = {node_id: "PENDING" for node_id in dag.nodes}
 
-    def render_dag_cards():
-        cards_html = []
-        for node in dag.nodes.values():
-            status = node_statuses.get(node.id, "PENDING")
-            badge_class = f"badge-{status.lower()}"
-            deps = ", ".join(node.dependencies) if node.dependencies else "Root Task"
+    def render_progress():
+        total = len(node_statuses)
+        done = sum(1 for s in node_statuses.values() if s in ("COMPLETED", "FAILED"))
+        with progress_container:
+            st.caption(f"{done} of {total} nodes complete")
+            st.progress(done / total if total else 0.0)
 
-            cards_html.append(
-                f"""
-                <div class="notion-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-weight:600; font-size:0.95rem;">🔵 {node.id}</span>
-                        <span class="badge {badge_class}">{status}</span>
-                    </div>
-                    <div style="font-size:0.87rem; line-height:1.4; margin-bottom:6px;">{node.task}</div>
-                    <div style="font-size:0.75rem; color:#718096;">↳ <em>Depends on: {deps}</em></div>
-                </div>
-                """
-            )
-        dag_card_container.markdown("\n".join(cards_html), unsafe_allow_html=True)
+    def render_dag():
+        dag_graph_container.markdown(
+            render_dag_graph(dag, node_statuses), unsafe_allow_html=True
+        )
 
-    render_dag_cards()
+    render_progress()
+    render_dag()
+
+    # Show a shimmer skeleton in the synthesis panel while nodes run,
+    # instead of leaving it visually empty behind a spinner caption.
+    with report_status_container:
+        st.markdown(render_synthesis_skeleton(), unsafe_allow_html=True)
 
     # Progress updater
     def update_progress(node, status):
         node_statuses[node.id] = status
-        render_dag_cards()
+        render_progress()
+        render_dag()
 
     # 3. Execute DAG
-    with report_status_container:
-        with st.spinner(f"Executing DAG with {max_dag_workers} parallel workers..."):
-            dag = executor.execute(dag, progress_callback=update_progress)
+    with st.spinner(f"Executing DAG with {max_dag_workers} parallel workers..."):
+        dag = executor.execute(dag, progress_callback=update_progress)
 
     # 4. Collect results & Generate final synthesis
     results = dag.get_results()
