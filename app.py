@@ -48,15 +48,20 @@ from browser import browse_webpage
 # Load Environment Variables
 # --------------------------------------------------
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 def get_secret(key: str, default: str = "") -> str:
     """Safely fetch a secret from Streamlit secrets or environment variables."""
     try:
-        return st.secrets.get(key, os.getenv(key, default))
+        if hasattr(st, "secrets") and key in st.secrets:
+            val = str(st.secrets[key]).strip()
+            if val:
+                return val
     except Exception:
-        return os.getenv(key, default)
+        pass
+    val = os.getenv(key, default)
+    return str(val).strip() if val else default
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -218,12 +223,18 @@ with st.sidebar:
 
     if provider == "Groq (Cloud)":
 
+        groq_env = get_secret("GROQ_API_KEY")
         groq_api_key = st.text_input(
             "Groq API Key",
             type="password",
-            value=get_secret("GROQ_API_KEY"),
+            value=groq_env,
             placeholder="gsk_...",
+            help="Automatically loaded from .env if present.",
         )
+        if groq_api_key.strip():
+            st.caption("🟢 Groq Key loaded")
+        else:
+            st.caption("🔴 Groq Key required")
 
         available_models = get_groq_models(groq_api_key)
 
@@ -249,12 +260,18 @@ with st.sidebar:
             index=0,
         )
 
+    tavily_env = get_secret("TAVILY_API_KEY")
     tavily_api_key = st.text_input(
         "Tavily API Key",
         type="password",
-        value=get_secret("TAVILY_API_KEY"),
+        value=tavily_env,
         placeholder="tvly-...",
+        help="Automatically loaded from .env if present.",
     )
+    if tavily_api_key.strip():
+        st.caption("🟢 Tavily Key loaded")
+    else:
+        st.caption("🟡 No Tavily Key (will use DDGS fallback)")
 
     max_dag_workers = st.slider(
         "Parallel DAG Tasks",
