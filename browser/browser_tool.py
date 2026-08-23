@@ -1,7 +1,7 @@
 import asyncio
-import urllib.request
+import urllib.parse
 from html.parser import HTMLParser
-from playwright.async_api import async_playwright
+import requests
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -29,19 +29,17 @@ class HTMLTextExtractor(HTMLParser):
 
 
 def _fast_http_fetch(url: str, max_chars: int = 4000) -> str:
-    """Sub-second HTTP fetch avoiding heavy browser spin-up."""
+    """Sub-second HTTP fetch with standard browser headers."""
     try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=3.5) as response:
-            html = response.read().decode("utf-8", errors="ignore")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        resp = requests.get(url, headers=headers, timeout=4, allow_redirects=True)
+        if resp.status_code == 200 and resp.text:
             parser = HTMLTextExtractor()
-            parser.feed(html)
+            parser.feed(resp.text)
             text = parser.get_text()
             if len(text) > 80:
                 return text[:max_chars]
@@ -50,48 +48,74 @@ def _fast_http_fetch(url: str, max_chars: int = 4000) -> str:
     return ""
 
 
-async def _browse(url: str, max_chars: int = 4000) -> str:
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(
-            viewport={"width": 1280, "height": 720}
-        )
-
-        try:
-            await page.goto(
-                url,
-                wait_until="domcontentloaded",
-                timeout=6000,
+async def _browse_playwright(url: str, max_chars: int = 4000) -> str:
+    """Headless Chromium browser extraction with Playwright."""
+    try:
+        from playwright.async_api import async_playwright
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(
+                viewport={"width": 1280, "height": 720},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             )
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=6000)
+                content = await page.locator("body").inner_text()
+                content = " ".join(content.split())
+                if len(content) > 80:
+                    return content[:max_chars]
+            finally:
+                await browser.close()
+    except Exception:
+        pass
+    return ""
 
-            content = await page.locator("body").inner_text()
-            content = " ".join(content.split())
-            return content[:max_chars]
 
-        except Exception as e:
-            return f"Browser error while opening {url}: {str(e)}"
+def _search_fallback_for_url(url: str) -> str:
+    """Fallback to search engine snippet extraction if target website is blocked/timing out."""
+    clean_target = url.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+    queries = [url, f"{clean_target} information"]
 
-        finally:
-            await browser.close()
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            for q in queries:
+                results = list(ddgs.text(q, max_results=3))
+                if results:
+                    snippets = [f"• {r.get('title')}: {r.get('body')}" for r in results]
+                    return f"Web content for {url}:\n\n" + "\n\n".join(snippets)
+    except Exception:
+        pass
+    return f"Unable to retrieve content from {url}."
 
 
 def browse_webpage(url: str) -> str:
     """
-    Ultra-fast web browsing:
-    1. Tries sub-second direct HTTP parse first (~200ms).
-    2. Falls back to headless Chromium with strict 6s timeout only if needed.
+    Multi-stage resilient webpage extraction:
+    1. Sub-second direct HTTP parse (~200ms).
+    2. Headless Chromium fallback (Playwright).
+    3. Intelligent search snippet fallback if the domain times out or blocks requests.
     """
-    # 1. Direct fast HTTP fetch
+    # 1. Fast HTTP
     fast_result = _fast_http_fetch(url)
     if fast_result:
         return fast_result
 
     # 2. Playwright fallback
     try:
-        return asyncio.run(_browse(url))
+        pw_result = asyncio.run(_browse_playwright(url))
+        if pw_result and "browser error" not in pw_result.lower():
+            return pw_result
     except RuntimeError:
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(_browse(url))
+            pw_result = loop.run_until_complete(_browse_playwright(url))
+            if pw_result and "browser error" not in pw_result.lower():
+                return pw_result
         finally:
             loop.close()
+    except Exception:
+        pass
+
+    # 3. Resilient search fallback
+    return _search_fallback_for_url(url)
