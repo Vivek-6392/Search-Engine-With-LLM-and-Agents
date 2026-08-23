@@ -520,6 +520,8 @@ from utils.tools import (
     python_calculator,
 )
 
+from langchain_core.tools import tool
+
 # --------------------------------------------------
 # Wikipedia Tool
 # --------------------------------------------------
@@ -539,79 +541,72 @@ arxiv = ArxivQueryRun(
 
 
 # --------------------------------------------------
-# Browser Tool
+# 8-Tool Specialized Suite with Explicit Typed Schemas
 # --------------------------------------------------
 
-browser_tool = Tool(
-    name="web_browser",
-    func=browse_webpage,
-    description="""
-Use this tool to open a webpage and extract its visible text.
-Input must be a complete URL.
-Use web_search first to find relevant URLs. Use web_browser when search results do not contain enough detail.
-Example: https://example.com
-""",
-)
+@tool
+def web_search_tool(query: str) -> str:
+    """Search the web for current information, live facts, scores, weather, and breaking news."""
+    return web_search(query)
 
 
-# --------------------------------------------------
-# 8-Tool Specialized Suite
-# --------------------------------------------------
+@tool
+def wikipedia_tool(query: str) -> str:
+    """Search Wikipedia for encyclopedic, historical, biographical, and general background knowledge."""
+    try:
+        return str(wikipedia.run(query))
+    except Exception as e:
+        return f"Wikipedia search error: {str(e)}"
+
+
+@tool
+def arxiv_tool(query: str) -> str:
+    """Search arXiv for scientific papers, AI/ML research, physics, mathematics, and academic computer science."""
+    try:
+        return str(arxiv.run(query))
+    except Exception as e:
+        return f"ArXiv search error: {str(e)}"
+
+
+@tool
+def github_search_tool(query: str) -> str:
+    """Search GitHub for top repositories, code libraries, star counts, descriptions, and open-source tools (e.g. vLLM, PyTorch, LangChain)."""
+    return search_github(query)
+
+
+@tool
+def finance_tool(query: str) -> str:
+    """Fetch real-time stock prices, crypto prices, market caps, currency valuations, and financial summaries. Input should be a ticker symbol (NVDA, AAPL, BTC-USD, TSLA) or company name."""
+    return search_finance(query)
+
+
+@tool
+def pubmed_tool(query: str) -> str:
+    """Search PubMed for clinical trials, biomedical discoveries, healthcare papers, and medical treatments."""
+    return search_pubmed(query)
+
+
+@tool
+def calculator_tool(expression: str) -> str:
+    """Evaluate exact mathematical calculations, formula computations, and unit conversions. Examples: '2+2', 'sqrt(144) * 12', '1500 * (1+0.08)**5'."""
+    return python_calculator(expression)
+
+
+@tool
+def web_browser_tool(url: str) -> str:
+    """Open a webpage URL and extract its visible text when search results do not contain enough detail."""
+    return browse_webpage(url)
+
 
 tools = [
-    Tool(
-        name="web_search",
-        func=web_search,
-        description="""
-Search the web for current information, live facts, scores, weather, and breaking news.
-Tavily is primary with DDGS fallback. Returns titles, URLs, and snippets.
-""",
-    ),
-    Tool(
-        name="wikipedia",
-        func=wikipedia.run,
-        description="""
-Use for encyclopedic, historical, biographical, and general background knowledge.
-""",
-    ),
-    Tool(
-        name="arxiv",
-        func=arxiv.run,
-        description="""
-Use for scientific papers, AI/ML research, physics, mathematics, and academic computer science.
-""",
-    ),
-    Tool(
-        name="github_search",
-        func=search_github,
-        description="""
-Search GitHub for top repositories, code libraries, star counts, descriptions, and open-source tools (e.g. vLLM, PyTorch, LangChain).
-""",
-    ),
-    Tool(
-        name="finance_tool",
-        func=search_finance,
-        description="""
-Fetch real-time stock prices, crypto prices, market caps, currency valuations, and financial summaries.
-Input should be a ticker symbol (NVDA, AAPL, BTC-USD, TSLA, ETH-USD) or company name.
-""",
-    ),
-    Tool(
-        name="pubmed",
-        func=search_pubmed,
-        description="""
-Search PubMed for clinical trials, biomedical discoveries, healthcare papers, and medical treatments.
-""",
-    ),
-    Tool(
-        name="calculator",
-        func=python_calculator,
-        description="""
-Evaluate exact mathematical calculations, formula computations, unit conversions, and statistics.
-Input example: 'sqrt(144) * 12 + 2**8' or '1500 * (1 + 0.07)**10'.
-""",
-    ),
-    browser_tool,
+    web_search_tool,
+    wikipedia_tool,
+    arxiv_tool,
+    github_search_tool,
+    finance_tool,
+    pubmed_tool,
+    calculator_tool,
+    web_browser_tool,
 ]
 
 
@@ -624,10 +619,15 @@ agent_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             "You are an expert AI research agent equipped with 8 specialized tools: "
-            "(web_search, wikipedia, arxiv, github_search, finance_tool, pubmed, calculator, web_browser). "
-            "Select the most appropriate tool for the task (e.g., github_search for open-source code/repos, "
-            "finance_tool for stock/crypto prices, pubmed for medical/health topics, arxiv for scientific papers, "
-            "calculator for exact math, web_search for general/live facts). "
+            "(web_search_tool, wikipedia_tool, arxiv_tool, github_search_tool, finance_tool, pubmed_tool, calculator_tool, web_browser_tool). "
+            "Select the most appropriate tool for the task: "
+            "- For arithmetic, math formulas, equations, or numbers (e.g. 2+2): use `calculator_tool`. "
+            "- For open-source code/repos: use `github_search_tool`. "
+            "- For stock/crypto prices: use `finance_tool`. "
+            "- For medical/health topics: use `pubmed_tool`. "
+            "- For academic papers: use `arxiv_tool`. "
+            "- For general facts/news/weather: use `web_search_tool`. "
+            "- For encyclopedic overviews: use `wikipedia_tool`. "
             "Always include concrete facts, numbers, and source URLs when available.",
         ),
         ("human", "{input}"),
