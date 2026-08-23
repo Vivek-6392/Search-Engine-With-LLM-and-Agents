@@ -141,10 +141,9 @@ Context from completed dependency nodes:
 {context if context else "No dependency context."}
 
 Instructions:
-- If the dependency context already contains sufficient details to fulfill the task, synthesize and answer directly.
-- If the task asks for live, current, real-time data (like current weather, scores, dates, or latest events), you MUST use `web_search` to find real-time facts.
-- Do NOT output disclaimers claiming lack of live access or APIs. You have live tools (`web_search`, `web_browser`).
-- Return a concise, factual research result with concrete findings, numbers, and source URLs.
+- If the dependency context above already provides the information needed, synthesize and formulate your findings directly without extra search.
+- If you need fresh data or computation, make 1 focused tool call (e.g. calculator_tool, web_search_tool, github_search_tool, finance_tool, pubmed_tool, arxiv_tool, wikipedia_tool).
+- After receiving tool observations, immediately formulate and return your comprehensive findings, key facts, and URLs.
 """
 
         max_retries = 3
