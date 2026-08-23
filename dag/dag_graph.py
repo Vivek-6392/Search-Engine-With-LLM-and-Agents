@@ -7,13 +7,13 @@ which tool was called for each node (e.g. node_1 (calculator), node_2 (web searc
 from collections import defaultdict
 import textwrap
 
-ROW_HEIGHT = 116   # px per DAG tier
+ROW_HEIGHT = 118   # px per DAG tier
 BOX_HEIGHT = 62    # px node box
 PAD_TOP = 14       # px
 
 STATUS_STYLES = {
     "PENDING": {
-        "border": "#262626",
+        "border": "#2D3748",
         "bg": "#141414",
         "icon_color": "#64748B",
         "icon": "\u25cb",  # ○
@@ -90,12 +90,11 @@ def render_dag_graph(dag, node_statuses: dict) -> str:
         for i, node_id in enumerate(sorted(node_ids)):
             position[node_id] = (row, i, len(node_ids))
 
-    # SVG Connectors between nodes
+    # SVG Connectors between nodes (percentage X, pixel Y)
     edges_svg = []
     for node in dag.nodes.values():
         node_row, node_i, node_n = position[node.id]
-        # x coordinates scaled to 0-1000 viewBox
-        x2 = _center_x(node_i, node_n) * 10.0
+        x2 = _center_x(node_i, node_n)
         y2 = float(_row_top(node_row))
         status = node_statuses.get(node.id, "PENDING")
 
@@ -103,7 +102,7 @@ def render_dag_graph(dag, node_statuses: dict) -> str:
             if dep_id not in position:
                 continue
             dep_row, dep_i, dep_n = position[dep_id]
-            x1 = _center_x(dep_i, dep_n) * 10.0
+            x1 = _center_x(dep_i, dep_n)
             y1 = float(_row_top(dep_row) + BOX_HEIGHT)
             my = (y1 + y2) / 2.0
 
@@ -112,17 +111,17 @@ def render_dag_graph(dag, node_statuses: dict) -> str:
                 marker = "url(#arrow-completed)"
                 dash = ""
             elif status == "RUNNING":
-                stroke_color = "#D97706"
+                stroke_color = "#F59E0B"
                 marker = "url(#arrow-running)"
-                dash = 'stroke-dasharray="4,3"'
+                dash = 'stroke-dasharray="3,2"'
             else:
-                stroke_color = "#52525B"
+                stroke_color = "#64748B"
                 marker = "url(#arrow)"
                 dash = ""
 
             edges_svg.append(
-                f'<path d="M {x1:.1f} {y1:.1f} C {x1:.1f} {my:.1f}, {x2:.1f} {my:.1f}, {x2:.1f} {y2:.1f}" '
-                f'fill="none" stroke="{stroke_color}" stroke-width="2" {dash} marker-end="{marker}"/>'
+                f'<path d="M {x1:.2f} {y1:.1f} C {x1:.2f} {my:.1f}, {x2:.2f} {my:.1f}, {x2:.2f} {y2:.1f}" '
+                f'fill="none" stroke="{stroke_color}" stroke-width="2.5" vector-effect="non-scaling-stroke" {dash} marker-end="{marker}"/>'
             )
 
     # Node Cards with Tool Call Badges
@@ -190,17 +189,17 @@ def render_dag_graph(dag, node_statuses: dict) -> str:
     }}
     </style>
     <div style="position:relative; height:{total_height}px; width:100%; margin-bottom:8px;">
-        <svg viewBox="0 0 1000 {total_height}" preserveAspectRatio="none"
+        <svg viewBox="0 0 100 {total_height}" preserveAspectRatio="none"
              style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;">
             <defs>
                 <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#52525B" />
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#64748B" />
                 </marker>
                 <marker id="arrow-completed" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10B981" />
                 </marker>
                 <marker id="arrow-running" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#D97706" />
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#F59E0B" />
                 </marker>
             </defs>
             {"".join(edges_svg)}

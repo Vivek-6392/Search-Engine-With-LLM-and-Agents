@@ -12,13 +12,20 @@ class DAGPlanner:
     def create_dag(self, query: str, mode: str = "deep") -> ResearchDAG:
 
         if mode == "fast":
-            # Instant 1-node direct research DAG (0ms planning overhead)
+            # Connected 2-node direct research DAG (0ms planning overhead)
             dag = ResearchDAG()
             dag.add_node(
                 DAGNode(
                     id="node_1",
-                    task=f"Direct live search and fact-gathering for: {query}",
+                    task=f"Retrieve primary facts / calculate: {query}",
                     dependencies=[],
+                )
+            )
+            dag.add_node(
+                DAGNode(
+                    id="node_2",
+                    task=f"Verify and formulate concise result for: {query}",
+                    dependencies=["node_1"],
                 )
             )
             return dag
