@@ -10,6 +10,7 @@ class DAGNode:
     status: str = "PENDING"
     result: Optional[str] = None
     error: Optional[str] = None
+    tool_used: Optional[str] = None
 
 
 @dataclass

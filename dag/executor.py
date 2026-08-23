@@ -67,9 +67,10 @@ class DAGExecutor:
 
                     try:
 
-                        result = future.result()
+                        result, tools_used = future.result()
 
                         node.result = result
+                        node.tool_used = ", ".join(tools_used) if tools_used else "direct answer"
                         node.status = "COMPLETED"
 
                         if progress_callback:
@@ -157,13 +158,24 @@ Instructions:
                     }
                 )
 
-                if isinstance(response, dict):
-                    return response.get(
-                        "output",
-                        str(response)
-                    )
+                output_text = ""
+                tools_used = []
 
-                return str(response)
+                if isinstance(response, dict):
+                    output_text = response.get("output", str(response))
+                    steps = response.get("intermediate_steps", [])
+                    for step in steps:
+                        if isinstance(step, (list, tuple)) and len(step) > 0:
+                            action = step[0]
+                            t_name = getattr(action, "tool", "")
+                            if t_name:
+                                clean_name = t_name.replace("_tool", "").replace("_", " ")
+                                if clean_name not in tools_used:
+                                    tools_used.append(clean_name)
+                else:
+                    output_text = str(response)
+
+                return output_text, tools_used
 
             except Exception as e:
                 last_exception = e
