@@ -12,26 +12,31 @@ class DAGPlanner:
     def create_dag(self, query: str, mode: str = "deep") -> ResearchDAG:
 
         if mode == "fast":
-            mode_instructions = """
-Mode: FAST & CONCISE
-1. Create exactly 1 or 2 high-level research tasks for a rapid overview.
-2. Focus strictly on the primary direct answer.
-"""
-            max_nodes = 2
-        elif mode == "academic":
+            # Instant 1-node direct research DAG (0ms planning overhead)
+            dag = ResearchDAG()
+            dag.add_node(
+                DAGNode(
+                    id="node_1",
+                    task=f"Direct live search and fact-gathering for: {query}",
+                    dependencies=[],
+                )
+            )
+            return dag
+
+        if mode == "academic":
             mode_instructions = """
 Mode: ACADEMIC & SCIENTIFIC
-1. Create 2 to 4 nodes focusing on scientific literature, ArXiv papers, academic journals, and foundational concepts.
+1. Create 2 to 3 nodes focusing on scientific literature, ArXiv papers, academic journals, and foundational concepts.
 2. Structure nodes to find seminal papers, empirical findings, and academic consensus.
 """
-            max_nodes = 4
+            max_nodes = 3
         else:
             mode_instructions = """
 Mode: DEEP RESEARCH
-1. Create between 2 and 4 comprehensive nodes covering overview, specific dimensions, comparisons, and synthesis.
+1. Create 2 to 3 comprehensive nodes covering overview, specific dimensions, comparisons, and synthesis.
 2. Ensure dependent nodes build logically on previous findings.
 """
-            max_nodes = 4
+            max_nodes = 3
 
         prompt = f"""
 You are a research task planner.

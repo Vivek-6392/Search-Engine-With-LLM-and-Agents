@@ -321,8 +321,8 @@ def tavily_search(query: str) -> str:
 
     response = client.search(
         query=query,
-        search_depth="advanced",
-        max_results=4,
+        search_depth="basic",
+        max_results=5,
         include_answer=False,
     )
 
@@ -612,7 +612,7 @@ agent = AgentExecutor(
     tools=tools,
     verbose=False,
     handle_parsing_errors=True,
-    max_iterations=5,
+    max_iterations=2,
 )
 
 
