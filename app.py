@@ -1,13 +1,18 @@
 import json
 import os
 import urllib.request
-
+import re
 import streamlit as st
 from dotenv import load_dotenv
 
 from langchain_classic.agents import (
     AgentExecutor,
     create_tool_calling_agent,
+)
+
+from langchain_core.messages import (
+    HumanMessage,
+    SystemMessage,
 )
 
 from langchain_core.prompts import (
@@ -27,6 +32,7 @@ from langchain_community.utilities import (
     ArxivAPIWrapper,
 )
 
+from groq import Groq
 from langchain_groq import ChatGroq
 
 from tavily import TavilyClient
@@ -66,39 +72,48 @@ def get_secret(key: str, default: str = "") -> str:
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_groq_models(api_key: str) -> list[str]:
-    """Fetch active chat models dynamically from Groq API."""
+    """Fetch active chat models dynamically from Groq API using Groq SDK."""
     fallback_models = [
-        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
-        "openai/gpt-oss-safeguard-20b",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.6-27b",
+        "allam-2-7b",
     ]
     if not api_key:
         return fallback_models
 
     try:
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/models",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "User-Agent": "Streamlit-SearchEngine",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            data = json.loads(response.read().decode())
-            models = [
-                m["id"]
-                for m in data.get("data", [])
-                if m.get("active", True)
-                and not any(x in m["id"] for x in ["whisper", "embed", "tts"])
-            ]
-            if models:
-                # Prefer 120b at the top if available
-                models = sorted(
-                    models,
-                    key=lambda x: (0 if "120b" in x else 1, x),
-                )
-                return models
+        client = Groq(api_key=api_key)
+        model_list = client.models.list()
+        exclude_keywords = [
+            "whisper",
+            "embed",
+            "tts",
+            "guard",
+            "orpheus",
+            "compound",  # compound models do not support langchain tool calling
+        ]
+        active_models = [
+            m.id
+            for m in model_list.data
+            if m.active and not any(k in m.id.lower() for k in exclude_keywords)
+        ]
+
+        if active_models:
+            def model_priority(m_id: str) -> int:
+                m_lower = m_id.lower()
+                if "20b" in m_lower and "safeguard" not in m_lower:
+                    return 0  # #1 Default: openai/gpt-oss-20b
+                if "120b" in m_lower:
+                    return 1
+                if "qwen" in m_lower:
+                    return 2
+                if "allam" in m_lower:
+                    return 3
+                return 4
+
+            sorted_models = sorted(active_models, key=lambda x: (model_priority(x), x))
+            return sorted_models
     except Exception:
         pass
 
@@ -276,8 +291,8 @@ with st.sidebar:
     max_dag_workers = st.slider(
         "Parallel DAG Tasks",
         min_value=1,
-        max_value=4,
-        value=3,
+        max_value=6,
+        value=5,
     )
 
     st.divider()
@@ -662,45 +677,7 @@ tools = [
 
 
 # --------------------------------------------------
-# Research Agent
-# --------------------------------------------------
-
-agent_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "You are an expert AI research agent equipped with specialized domain tools: "
-            "(web_search_tool, wikipedia_tool, arxiv_tool, academic_papers_tool, pubmed_tool, "
-            "github_search_tool, huggingface_tool, stackoverflow_tool, hackernews_tool, "
-            "package_lookup_tool, finance_tool, forex_tool, weather_tool, calculator_tool, web_browser_tool).\n\n"
-            "CRITICAL ACCURACY RULES:\n"
-            "1. For current office-holders, directors, CEOs, university leaders, or real-time facts: ALWAYS use `web_search_tool` or `web_browser_tool` to obtain current live facts. Never guess or rely on outdated pre-2024 memory.\n"
-            "2. Select the best tool for the topic: `calculator_tool` (math), `weather_tool` (weather), `finance_tool` (stocks), `github_search_tool` (repos), `huggingface_tool` (AI models), `stackoverflow_tool` (code fixes), `academic_papers_tool` / `arxiv_tool` (science papers), `pubmed_tool` (medicine).\n"
-            "Always return accurate, factual findings with names and source URLs.",
-        ),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ]
-)
-
-agent_runnable = create_tool_calling_agent(
-    llm=llm,
-    tools=tools,
-    prompt=agent_prompt,
-)
-
-agent = AgentExecutor(
-    agent=agent_runnable,
-    tools=tools,
-    verbose=False,
-    handle_parsing_errors=True,
-    max_iterations=5,
-    return_intermediate_steps=True,
-)
-
-
-# --------------------------------------------------
-# DAG Components
+# Research Agent & DAG Components
 # --------------------------------------------------
 
 planner = DAGPlanner(
@@ -708,7 +685,8 @@ planner = DAGPlanner(
 )
 
 executor = DAGExecutor(
-    agent=agent,
+    llm=llm,
+    tools=tools,
     max_workers=max_dag_workers,
 )
 
@@ -856,22 +834,102 @@ Research Mode: {search_mode}
 Research Findings from DAG nodes:
 {combined_results}
 
-Guidelines:
+Formatting & Presentation Guidelines:
 1. **Direct Answer First**: Begin immediately with the direct, definitive answer in the opening paragraph.
-2. {length_guideline.strip()}
-3. **Adaptive Proportionality**: Do NOT write an overly long mega-report for short, simple, or definition questions. Make the response length natural and appropriate to the question asked.
-4. **Natural Sources & Hyperlinks**: Seamlessly embed markdown links (e.g., [vLLM GitHub](https://github.com/vllm-project/vllm)) when citing sources or facts.
-5. **No Meta-Talk**: Never mention "DAG nodes", "internal tasks", or execution logs.
+2. **Markdown Tables**: For comparisons or multi-entity data (prices, market caps, weather, versions), ALWAYS format them in clean GitHub-flavored Markdown tables with column headers and delimiter rows:
+| Company | Ticker | Current Price (USD) | Market Cap (USD) |
+| :--- | :--- | :--- | :--- |
+| Apple | AAPL | $309.35 | $4,514.71 B |
+| Microsoft | MSFT | $483.24 | $3,588.32 B |
+3. **Clean Calculations**: Present calculations in clean, readable bullet points:
+- **Total Market Cap**: $18,954.02 B
+- **Average Market Cap**: $3,790.80 B
+(Do NOT output raw addition formulas or duplicated equation terms).
+4. {length_guideline.strip()}
+5. **Adaptive Proportionality**: Make the response length natural and appropriate to the question asked.
+6. **Natural Sources & Hyperlinks**: Seamlessly embed markdown links (e.g., [Yahoo Finance AAPL](https://finance.yahoo.com/quote/AAPL)) when citing sources or facts.
+7. **Clean Bold Headers**: Use clean section headings (e.g. `### Current Stock Prices and Market Capitalization`) or bold text (e.g. `**Current Stock Prices and Market Capitalization**`) without leading or trailing spaces inside the asterisks.
+8. **No Meta-Talk**: Never mention "DAG nodes", "internal tasks", or execution logs.
 """
+
+    synth_system_prompt = (
+        "You are an expert research synthesizer. All data gathering, web research, calculations, "
+        "and fact extraction have already been completed by upstream agent workers.\n"
+        "Your ONLY task is to write a final, comprehensive, well-structured Markdown answer strictly based on the provided findings.\n"
+        "CRITICAL CONSTRAINTS:\n"
+        "1. Do NOT call, invoke, or output any tool calls, function calls, or JSON actions (such as `browser.search`, `web_search`, etc.).\n"
+        "2. Output ONLY direct, fluent Markdown text with clean Markdown tables (`| ... |`)."
+    )
 
     with report_status_container:
         with st.spinner("Synthesizing final research report..."):
-            final_response = llm.invoke(final_prompt)
+            try:
+                final_response = llm.invoke(
+                    [
+                        SystemMessage(content=synth_system_prompt),
+                        HumanMessage(content=final_prompt),
+                    ]
+                )
+            except Exception as synth_err:
+                err_str = str(synth_err)
+                if any(x in err_str for x in ["tool_use_failed", "Tool choice is none", "failed_generation"]):
+                    # Fallback to plain prompt format without tool triggers
+                    fallback_text = (
+                        f"Please write a comprehensive final summary answering this question: '{query}' based on these gathered findings:\n\n"
+                        f"{combined_results}\n\n"
+                        f"Do not call tools. Respond only in clean Markdown tables and text."
+                    )
+                    final_response = llm.invoke(fallback_text)
+                else:
+                    raise synth_err
 
     if hasattr(final_response, "content"):
-        answer = final_response.content
+        answer = str(final_response.content)
     else:
         answer = str(final_response)
+
+    # 1. Clean Unicode spacing artifacts and non-breaking hyphens
+    answer = answer.replace("\u2217", "*").replace("∗", "*")
+    answer = answer.replace("\u202f", " ").replace("\u00a0", " ").replace("\u200b", "").replace("\ufeff", "")
+    answer = answer.replace("\u2011", "-").replace("‑", "-")
+
+    # 2. Clean garbled inline arithmetic equations from open-source tokenizers
+    answer = re.sub(r"=\s*[*]+\s*[\d,\.]+\s*[A-Za-z]*\s*=\s*[*]+", " = **", answer)
+    answer = re.sub(r"÷\s*\d+\s*=\s*[*]+[\d,\.]+\s*[A-Za-z]*\s*÷\s*\d+\s*=\s*[*]+", " ÷ 5 = **", answer)
+
+    # 3. Auto-convert unpiped text tables into standard GitHub-flavored Markdown tables
+    lines = [l.strip() for l in answer.split("\n")]
+    formatted_lines = []
+    idx = 0
+    while idx < len(lines):
+        # Detect table headers (e.g. Company / Ticker / Price / Market Cap)
+        if idx + 3 < len(lines) and any(lines[idx].lower().startswith(h) for h in ["company", "asset", "entity", "city", "item", "library", "model"]) and any(lines[idx+1].lower().startswith(h) for h in ["ticker", "symbol", "code", "version", "temp", "metric", "task"]):
+            headers = [lines[idx], lines[idx+1], lines[idx+2], lines[idx+3]]
+            table_md = [
+                "| " + " | ".join(headers) + " |",
+                "| " + " | ".join([":---"] * len(headers)) + " |",
+            ]
+            idx += 4
+            while idx + 3 < len(lines) and lines[idx] and not lines[idx].startswith("**") and not lines[idx].startswith("#") and not lines[idx].startswith("Source") and not lines[idx].startswith("These"):
+                row = [lines[idx], lines[idx+1], lines[idx+2], lines[idx+3]]
+                table_md.append("| " + " | ".join(row) + " |")
+                idx += 4
+            formatted_lines.extend(table_md)
+        else:
+            formatted_lines.append(lines[idx])
+            idx += 1
+
+    answer = "\n".join(formatted_lines)
+
+    # 4. Fix spaces inside bold markers e.g. ** $309.35 ** -> **$309.35**
+    answer = re.sub(r"\*\*\s+([^\*\n]+?)\s+\*\*", r"**\1**", answer)
+    answer = re.sub(r"\*\*\s+([^\*\n]+?)\*\*", r"**\1**", answer)
+    answer = re.sub(r"\*\*([^\*\n]+?)\s+\*\*", r"**\1**", answer)
+    # Fix glued bold asterisks e.g. trillion**and -> trillion** and
+    answer = re.sub(r"(\w)\*\*", r"\1 **", answer)
+    answer = re.sub(r"\*\*(\w)", r"** \1", answer)
+    # Escape dollar signs preceding numbers so Streamlit KaTeX doesn't parse currency as LaTeX formulas
+    answer = re.sub(r"(?<!\\)\$([0-9])", r"\\$\1", answer)
 
     # Clear status container and render final report
     report_status_container.empty()

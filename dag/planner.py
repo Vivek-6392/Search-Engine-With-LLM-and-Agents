@@ -1,6 +1,8 @@
 import json
 import re
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from dag.models import DAGNode, ResearchDAG
 
 
@@ -33,63 +35,83 @@ class DAGPlanner:
         if mode == "academic":
             mode_instructions = """
 Mode: ACADEMIC & SCIENTIFIC
-1. Create 2 to 3 nodes focusing on scientific literature, ArXiv papers, academic journals, and foundational concepts.
-2. Structure nodes to find seminal papers, empirical findings, and academic consensus.
+1. Create 3 to 6 focused nodes covering scientific literature, ArXiv papers, academic journals, and foundational concepts.
+2. Maximize parallelism: Split research across different concepts/papers into independent parallel nodes (dependencies: []) so they run simultaneously.
+3. Use a final dependent node to compare and synthesize findings.
 """
-            max_nodes = 3
+            max_nodes = 6
         else:
             mode_instructions = """
-Mode: DEEP RESEARCH
-1. Create 2 to 3 comprehensive nodes covering overview, specific dimensions, comparisons, and synthesis.
-2. Ensure dependent nodes build logically on previous findings.
+Mode: DEEP RESEARCH & PARALLEL EXECUTION
+1. PARALLEL DECOMPOSITION (CRITICAL): If the query asks about multiple entities, companies, cities, questions, metrics, or comparisons, create a separate INDEPENDENT research node with `dependencies: []` for EACH entity/subject (e.g. Node 1 for Company A, Node 2 for Company B, Node 3 for Company C).
+2. DO NOT bundle multiple subjects into a single node.
+3. DO NOT create artificial sequential chains (e.g. node_1 -> node_2 -> node_3 for "validate", "format table", "analyze").
+4. FINAL SYNTHESIS/CALCULATION NODE: Create a single dependent node at the end that lists all the parallel research nodes in its `dependencies` to aggregate, compare, calculate, or synthesize the final result.
 """
-            max_nodes = 3
+            max_nodes = 6
 
         prompt = f"""
-You are a research task planner.
+You are a DAG research task planner designed for high-concurrency parallel execution.
 
-Break the following user query into a small directed acyclic graph (DAG).
-
-Each node represents a research task.
+Break the following user query into a Directed Acyclic Graph (DAG) of research tasks.
 
 {mode_instructions}
 
-Rules:
-1. Create at most {max_nodes} nodes.
-2. Independent tasks should have an empty dependencies list [].
-3. A task that needs results from another task should list that node ID inside dependencies.
-4. Do not create circular dependencies.
-5. Keep tasks concise and searchable.
-6. Return ONLY valid JSON.
-
-User query:
-{query}
-
-Return exactly this format:
+Graph Construction Rules:
+1. Create up to {max_nodes} nodes.
+2. MAXIMIZE CONCURRENCY: All independent data-fetching / research tasks MUST have `"dependencies": []` so they run simultaneously in parallel.
+3. ONLY aggregation, comparison, calculation, or synthesis tasks should have dependencies (listing the IDs of the parallel nodes they depend on).
+4. Return ONLY valid JSON matching this schema:
 {{
     "nodes": [
         {{
             "id": "node_1",
-            "task": "research task",
+            "task": "Retrieve stock price and market cap for Apple (AAPL)",
             "dependencies": []
         }},
         {{
             "id": "node_2",
-            "task": "another research task",
-            "dependencies": ["node_1"]
+            "task": "Retrieve stock price and market cap for Microsoft (MSFT)",
+            "dependencies": []
+        }},
+        {{
+            "id": "node_3",
+            "task": "Retrieve stock price and market cap for Nvidia (NVDA)",
+            "dependencies": []
+        }},
+        {{
+            "id": "node_4",
+            "task": "Calculate combined average valuation and compare findings",
+            "dependencies": ["node_1", "node_2", "node_3"]
         }}
     ]
 }}
+
+User query:
+{query}
 """
 
-        response = self.llm.invoke(prompt)
-
-        if hasattr(response, "content"):
-            content = response.content
-        else:
-            content = str(response)
+        system_prompt = (
+            "You are a research task planner. Output ONLY a valid JSON object defining the research DAG. "
+            "Do NOT call tools, search functions, or output tool call JSON."
+        )
 
         try:
+            try:
+                response = self.llm.invoke(
+                    [
+                        SystemMessage(content=system_prompt),
+                        HumanMessage(content=prompt),
+                    ]
+                )
+            except Exception:
+                response = self.llm.invoke(prompt)
+
+            if hasattr(response, "content"):
+                content = response.content
+            else:
+                content = str(response)
+
             data = self._extract_json(content)
             return self._build_dag(data, max_nodes=max_nodes)
 
@@ -137,7 +159,7 @@ Return exactly this format:
 
         return json.loads(json_string)
 
-    def _build_dag(self, data: dict, max_nodes: int = 4) -> ResearchDAG:
+    def _build_dag(self, data: dict, max_nodes: int = 6) -> ResearchDAG:
 
         dag = ResearchDAG()
 

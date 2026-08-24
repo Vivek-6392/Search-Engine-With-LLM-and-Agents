@@ -1,6 +1,10 @@
+import ast
+import concurrent.futures
 import json
 import math
+import operator
 import re
+import sys
 import urllib.parse
 import urllib.request
 import yfinance as yf
@@ -144,31 +148,125 @@ def search_pubmed(query: str) -> str:
 # 4. Safe Python Calculator / Math Tool
 # --------------------------------------------------
 
-def python_calculator(expression: str) -> str:
-    """Evaluate mathematical expressions, formulas, and statistical computations."""
-    clean_expr = expression.strip().replace("`", "")
-    safe_dict = {
-        "math": math,
-        "sqrt": math.sqrt,
-        "pow": math.pow,
-        "sin": math.sin,
-        "cos": math.cos,
-        "tan": math.tan,
-        "log": math.log,
-        "log10": math.log10,
-        "exp": math.exp,
-        "pi": math.pi,
-        "e": math.e,
-        "abs": abs,
-        "round": round,
-        "min": min,
-        "max": max,
-        "sum": sum,
-    }
+_BIN_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
 
+_UNARY_OPS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+_SAFE_MATH_FUNCS = {
+    "sqrt": math.sqrt,
+    "pow": math.pow,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "log": math.log,
+    "log10": math.log10,
+    "exp": math.exp,
+    "abs": abs,
+    "round": round,
+    "min": min,
+    "max": max,
+    "sum": sum,
+}
+
+_SAFE_MATH_CONSTANTS = {
+    "pi": math.pi,
+    "e": math.e,
+}
+
+
+def _eval_ast_node(node):
+    if isinstance(node, ast.Expression):
+        return _eval_ast_node(node.body)
+
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float, complex)):
+            return node.value
+        raise ValueError(f"Unsupported constant type: {type(node.value).__name__}")
+
+    # For Python < 3.8 backwards compatibility
+    if sys.version_info < (3, 8) and isinstance(node, getattr(ast, "Num", ())):
+        return node.n
+
+    if isinstance(node, ast.Name):
+        if node.id in _SAFE_MATH_CONSTANTS:
+            return _SAFE_MATH_CONSTANTS[node.id]
+        if node.id in _SAFE_MATH_FUNCS:
+            return _SAFE_MATH_FUNCS[node.id]
+        raise ValueError(f"Undefined or unauthorized name: '{node.id}'")
+
+    if isinstance(node, ast.UnaryOp):
+        op_type = type(node.op)
+        if op_type not in _UNARY_OPS:
+            raise ValueError(f"Unsupported unary operator: {op_type.__name__}")
+        operand_val = _eval_ast_node(node.operand)
+        return _UNARY_OPS[op_type](operand_val)
+
+    if isinstance(node, ast.BinOp):
+        op_type = type(node.op)
+        if op_type not in _BIN_OPS:
+            raise ValueError(f"Unsupported binary operator: {op_type.__name__}")
+        left_val = _eval_ast_node(node.left)
+        right_val = _eval_ast_node(node.right)
+
+        if op_type is ast.Pow:
+            # Prevent excessive exponentiation that could freeze execution or overflow
+            if isinstance(right_val, (int, float)):
+                if right_val > 10000 or right_val < -10000:
+                    raise ValueError("Exponent exceeds safe limits (|exp| <= 10000)")
+                if isinstance(left_val, (int, float)) and abs(left_val) > 1000 and right_val > 100:
+                    raise ValueError("Base and exponent combination exceeds safe limits")
+        return _BIN_OPS[op_type](left_val, right_val)
+
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("Direct function calls only (attribute access is prohibited)")
+        func_name = node.func.id
+        if func_name not in _SAFE_MATH_FUNCS:
+            raise ValueError(f"Unauthorized function call: '{func_name}'")
+        func = _SAFE_MATH_FUNCS[func_name]
+        args = [_eval_ast_node(arg) for arg in node.args]
+        return func(*args)
+
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return [_eval_ast_node(elt) for elt in node.elts]
+
+    raise ValueError(f"Syntax not permitted in safe calculator: {type(node).__name__}")
+
+
+def evaluate_math_expression(expression: str, timeout_seconds: float = 2.0):
+    """Parse and evaluate a math expression using safe AST traversal with timeout."""
+    clean_expr = expression.strip().replace("`", "")
+    if not clean_expr:
+        raise ValueError("Empty mathematical expression")
+
+    tree = ast.parse(clean_expr, mode="eval")
+
+    def _run():
+        return _eval_ast_node(tree)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run)
+        return future.result(timeout=timeout_seconds)
+
+
+def python_calculator(expression: str) -> str:
+    """Evaluate mathematical expressions, formulas, and statistical computations safely."""
     try:
-        result = eval(clean_expr, {"__builtins__": {}}, safe_dict)
+        result = evaluate_math_expression(expression, timeout_seconds=2.0)
         return f"Calculation Result: {result}"
+    except concurrent.futures.TimeoutError:
+        return "Calculation Error: Evaluation timed out"
     except Exception as e:
         return f"Calculation Error: {str(e)}"
 

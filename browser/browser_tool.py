@@ -1,7 +1,50 @@
 import asyncio
+import ipaddress
+import socket
 import urllib.parse
 from html.parser import HTMLParser
 import requests
+
+
+def is_safe_url(url: str) -> bool:
+    """
+    Validate that the URL has an allowed scheme (http/https) and does not
+    resolve to private, loopback, link-local, or reserved IP ranges (SSRF protection).
+    """
+    if not isinstance(url, str) or not url.strip():
+        return False
+
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+        scheme = parsed.scheme.lower()
+        if scheme not in ("http", "https"):
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        # Resolve hostname to check IP addresses
+        addr_info = socket.getaddrinfo(hostname, None)
+        if not addr_info:
+            return False
+
+        for item in addr_info:
+            ip_str = item[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                return False
+
+        return True
+    except Exception:
+        return False
 
 
 class HTMLTextExtractor(HTMLParser):
@@ -30,6 +73,9 @@ class HTMLTextExtractor(HTMLParser):
 
 def _fast_http_fetch(url: str, max_chars: int = 4000) -> str:
     """Sub-second HTTP fetch with standard browser headers."""
+    if not is_safe_url(url):
+        return ""
+
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -50,6 +96,9 @@ def _fast_http_fetch(url: str, max_chars: int = 4000) -> str:
 
 async def _browse_playwright(url: str, max_chars: int = 4000) -> str:
     """Headless Chromium browser extraction with Playwright."""
+    if not is_safe_url(url):
+        return ""
+
     try:
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
@@ -92,10 +141,14 @@ def _search_fallback_for_url(url: str) -> str:
 def browse_webpage(url: str) -> str:
     """
     Multi-stage resilient webpage extraction:
-    1. Sub-second direct HTTP parse (~200ms).
-    2. Headless Chromium fallback (Playwright).
-    3. Intelligent search snippet fallback if the domain times out or blocks requests.
+    1. Validate URL to prevent SSRF against private/loopback/cloud metadata ranges.
+    2. Sub-second direct HTTP parse (~200ms).
+    3. Headless Chromium fallback (Playwright).
+    4. Intelligent search snippet fallback if the domain is unsafe, times out, or blocks requests.
     """
+    if not is_safe_url(url):
+        return _search_fallback_for_url(url)
+
     # 1. Fast HTTP
     fast_result = _fast_http_fetch(url)
     if fast_result:

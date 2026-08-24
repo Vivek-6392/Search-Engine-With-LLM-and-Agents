@@ -15,3 +15,4 @@ ddgs>=1.0.0
 tavily-python
 
 playwright
+pytest

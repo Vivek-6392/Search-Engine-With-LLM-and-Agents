@@ -44,3 +44,7 @@ jobs:
       - name: Check Python syntax
         run: |
           python -m compileall .
+
+      - name: Run pytest
+        run: |
+          pytest
