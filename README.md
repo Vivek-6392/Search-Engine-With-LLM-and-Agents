@@ -141,4 +141,4 @@ The application includes multi-session chat persistence powered by SQLite (`data
 ---
 
 ## 📄 License
-Distributed under the MIT License. See [LICENSE](file:///c:/Users/vivek/OneDrive/Desktop/Search-Engine-With-LLM-and-Agents/LICENSE) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/Vivek-6392/Search-Engine-With-LLM-and-Agents/blob/feature/dag-web-browser/LICENSE) for more information.
