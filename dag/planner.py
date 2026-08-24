@@ -11,7 +11,7 @@ class DAGPlanner:
     def __init__(self, llm):
         self.llm = llm
 
-    def create_dag(self, query: str, mode: str = "deep") -> ResearchDAG:
+    def create_dag(self, query: str, mode: str = "deep", context: str = "") -> ResearchDAG:
 
         if mode == "fast":
             # Connected 2-node direct research DAG (0ms planning overhead)
@@ -50,18 +50,21 @@ Mode: DEEP RESEARCH & PARALLEL EXECUTION
 """
             max_nodes = 6
 
+        context_section = f"\nPrior Conversation Context:\n{context.strip()}\n" if context and context.strip() else ""
+
         prompt = f"""
 You are a DAG research task planner designed for high-concurrency parallel execution.
 
 Break the following user query into a Directed Acyclic Graph (DAG) of research tasks.
-
+{context_section}
 {mode_instructions}
 
 Graph Construction Rules:
 1. Create up to {max_nodes} nodes.
 2. MAXIMIZE CONCURRENCY: All independent data-fetching / research tasks MUST have `"dependencies": []` so they run simultaneously in parallel.
 3. ONLY aggregation, comparison, calculation, or synthesis tasks should have dependencies (listing the IDs of the parallel nodes they depend on).
-4. Return ONLY valid JSON matching this schema:
+4. If prior conversation context is provided above, incorporate it to resolve entity references or follow-up comparisons.
+5. Return ONLY valid JSON matching this schema:
 {{
     "nodes": [
         {{

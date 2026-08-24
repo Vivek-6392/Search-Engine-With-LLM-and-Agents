@@ -99,3 +99,27 @@ def test_create_dag_fallback_on_llm_error():
     assert len(dag.nodes) == 1
     assert dag.nodes["node_1"].task == "Fallback test query"
     assert dag.nodes["node_1"].dependencies == []
+
+
+def test_create_dag_with_context_invokes_llm_with_context():
+    mock_llm = mock.MagicMock()
+    mock_response = mock.MagicMock()
+    mock_response.content = json.dumps({
+        "nodes": [
+            {"id": "node_1", "task": "Compare Apple with previously discussed Microsoft", "dependencies": []}
+        ]
+    })
+    mock_llm.invoke.return_value = mock_response
+
+    planner = DAGPlanner(llm=mock_llm)
+    context_text = "Turn 1: Discussed Microsoft market cap of $3.5T."
+    dag = planner.create_dag("Compare that to Apple", mode="deep", context=context_text)
+
+    assert len(dag.nodes) == 1
+    assert "node_1" in dag.nodes
+    # Check that LLM received context in prompt
+    call_args = mock_llm.invoke.call_args[0][0]
+    human_msg = [m for m in call_args if hasattr(m, "content") and "Prior Conversation Context:" in m.content]
+    assert len(human_msg) == 1
+    assert context_text in human_msg[0].content
+

@@ -122,8 +122,21 @@ streamlit run app.py
 ## ⚙️ Configuration & Options
 
 - **Provider Switching**: Toggle between **Groq**, **Ollama (Local)**, and **OpenAI** in the sidebar.
-- **Model Selection**: Switch between `llama-3.3-70b-versatile`, `mixtral-8x7b-32768`, `mistral-nemo`, `gpt-4o-mini`, etc.
+- **Model Selection**: Switch between `qwen/qwen3.6-27b`, `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, etc.
 - **Parallel Workers**: Adjust parallel DAG concurrency (1 to 5 workers) based on your system hardware.
+
+---
+
+## 💬 Multi-Chat Sessions & Memory Architecture
+
+The application includes multi-session chat persistence powered by SQLite (`data/chats.db`):
+- **Named Chat Threads**: Create new threads, browse previous research runs, rename chats inline, and delete old conversations.
+- **Auto-Titling**: Automatic 4–6 word title generation summarizing the first research turn using the active LLM.
+- **Rolling Memory**: Automatically maintains rolling context summaries for extended research discussions beyond 6 turns to keep prompt token overhead bounded.
+- **DAG Snapshots**: Every assistant response stores its full DAG node graph and tool findings, enabling retrospective inspection for historical turns.
+
+> **Note for Hugging Face Spaces Deployments:**
+> When deployed on Hugging Face Spaces free-tier instances, the local disk is ephemeral and will reset upon application rebuilds or space restarts. For persistent production deployments, attach persistent storage or configure an external database backend.
 
 ---
 
