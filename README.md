@@ -1,16 +1,4 @@
----
-title: Autonomous Research Engine with LLM & DAG Agents
-emoji: 🧠
-colorFrom: indigo
-colorTo: purple
-sdk: streamlit
-sdk_version: "1.35.0"
-python_version: "3.10"
-app_file: app.py
-pinned: false
----
-
-# 🔍 Autonomous Multi-Agent Research Engine
+# 🔍 DeepSearchAI - Autonomous Multi-Agent Research Engine
 
 An advanced, multi-agent AI research engine powered by **Directed Acyclic Graph (DAG) task decomposition**, **parallel agent execution**, and a suite of **15 specialized domain tools** for live web synthesis, academic literature review, code search, and market intelligence.
 
