@@ -1,5 +1,7 @@
 streamlit
 python-dotenv
+requests
+groq
 
 langchain
 langchain-core

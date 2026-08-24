@@ -135,8 +135,40 @@ The application includes multi-session chat persistence powered by SQLite (`data
 - **Rolling Memory**: Automatically maintains rolling context summaries for extended research discussions beyond 6 turns to keep prompt token overhead bounded.
 - **DAG Snapshots**: Every assistant response stores its full DAG node graph and tool findings, enabling retrospective inspection for historical turns.
 
-> **Note for Hugging Face Spaces Deployments:**
-> When deployed on Hugging Face Spaces free-tier instances, the local disk is ephemeral and will reset upon application rebuilds or space restarts. For persistent production deployments, attach persistent storage or configure an external database backend.
+---
+
+## ☁️ Deploying to Streamlit Community Cloud
+
+You can deploy this research engine for free on [Streamlit Community Cloud](https://share.streamlit.io):
+
+1. **Push to GitHub**:
+   Ensure your code is pushed to your GitHub repository:
+   ```bash
+   git add .
+   git commit -m "Configure Streamlit deployment"
+   git push origin main
+   ```
+
+2. **Connect Streamlit Cloud**:
+   - Go to [share.streamlit.io](https://share.streamlit.io/) and log in with your GitHub account.
+   - Click **"New app"** (or **"Create app"**).
+   - Select your repository: `Vivek-6392/Search-Engine-With-LLM-and-Agents`
+   - Set **Branch**: `main` (or your active branch)
+   - Set **Main file path**: `app.py`
+
+3. **Configure Secrets**:
+   - Before clicking Deploy, click **"Advanced settings..."**
+   - In the **Secrets** section, enter your API keys (TOML format):
+     ```toml
+     GROQ_API_KEY = "gsk_your_groq_api_key"
+     TAVILY_API_KEY = "tvly-your_tavily_api_key"
+     OPENAI_API_KEY = "sk-your_openai_api_key"
+     ```
+   - Click **Save**.
+
+4. **Deploy**:
+   - Click **Deploy!**
+   - Streamlit Cloud will automatically install dependencies from `requirements.txt` and launch the app with live updates.
 
 ---
 
