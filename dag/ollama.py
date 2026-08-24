@@ -23,6 +23,7 @@ class ChatOllama(BaseChatModel):
     model: str = "mistral-nemo:latest"
     base_url: str = "http://localhost:11434"
     temperature: float = 0.0
+    timeout: int = 300
     bound_tools: list[dict[str, Any]] = []
 
     @property
@@ -41,6 +42,7 @@ class ChatOllama(BaseChatModel):
             model=self.model,
             base_url=self.base_url,
             temperature=self.temperature,
+            timeout=self.timeout,
             bound_tools=converted,
         )
 
@@ -93,7 +95,7 @@ class ChatOllama(BaseChatModel):
             headers={"Content-Type": "application/json"},
         )
 
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             msg_data = data.get("message", {})
             content = msg_data.get("content", "")

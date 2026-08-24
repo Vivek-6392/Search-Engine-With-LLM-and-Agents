@@ -373,6 +373,7 @@ else:
         model=model_name,
         base_url=ollama_base_url,
         temperature=0,
+        timeout=300,
     )
 
 
@@ -905,6 +906,7 @@ Formatting & Presentation Guidelines:
 
         with report_status_container:
             with st.spinner("Synthesizing final research report..."):
+                final_response = None
                 try:
                     final_response = llm.invoke(
                         [
@@ -914,15 +916,18 @@ Formatting & Presentation Guidelines:
                     )
                 except Exception as synth_err:
                     err_str = str(synth_err)
-                    if any(x in err_str for x in ["tool_use_failed", "Tool choice is none", "failed_generation"]):
+                    try:
                         fallback_text = (
                             f"Please write a comprehensive final summary answering this question: '{user_text}' based on these gathered findings:\n\n"
                             f"{combined_results}\n\n"
                             f"Do not call tools. Respond only in clean Markdown tables and text."
                         )
                         final_response = llm.invoke(fallback_text)
-                    else:
-                        raise synth_err
+                    except Exception as fb_err:
+                        final_response = (
+                            f"### Research Findings\n\n{combined_results}\n\n"
+                            f"> ⚠️ *Note: Final LLM synthesis timed out or encountered an error ({str(fb_err)[:120]}). Displaying raw verified findings above.*"
+                        )
 
         if hasattr(final_response, "content"):
             answer = str(final_response.content)
