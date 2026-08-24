@@ -501,3 +501,48 @@ def convert_forex(query: str) -> str:
             return f"Live Foreign Exchange Rates (Base: {base}):\n" + "\n".join(rate_lines)
     except Exception as e:
         return f"Forex rate lookup error: {str(e)}"
+
+
+# --------------------------------------------------
+# 12. Wikipedia Encyclopedia Tool
+# --------------------------------------------------
+
+def search_wikipedia(query: str) -> str:
+    """Search Wikipedia with automatic DuckDuckGo fallback for maximum resilience."""
+    clean_query = query.strip()
+
+    # 1. Try DuckDuckGo site search first (bypasses Wikipedia API rate limits)
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(f"site:wikipedia.org {clean_query}", max_results=3))
+            if results:
+                snippets = [f"• [{r.get('title', 'Wikipedia')}]({r.get('href', '')}):\n  {r.get('body', '')}" for r in results]
+                return "Wikipedia Knowledge:\n\n" + "\n\n".join(snippets)
+    except Exception:
+        pass
+
+    # 2. Try MediaWiki API
+    try:
+        enc_query = urllib.parse.quote(clean_query)
+        search_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={enc_query}&utf8=&format=json&srlimit=3"
+        req = urllib.request.Request(
+            search_url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            items = data.get("query", {}).get("search", [])
+            if items:
+                snippets = []
+                for item in items[:3]:
+                    title = item.get("title", "")
+                    raw_snippet = item.get("snippet", "")
+                    clean_snippet = re.sub(r"<[^>]+>", "", raw_snippet)
+                    page_url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title)}"
+                    snippets.append(f"• [{title}]({page_url}):\n  {clean_snippet}")
+                return "Wikipedia Search Results:\n\n" + "\n\n".join(snippets)
+    except Exception:
+        pass
+
+    return f"No Wikipedia reference found for '{query}'."

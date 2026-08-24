@@ -56,6 +56,7 @@ from utils.tools import (
     search_weather,
     lookup_package,
     convert_forex,
+    search_wikipedia,
 )
 
 
@@ -454,20 +455,26 @@ def web_search_tool(query: str) -> str:
 
 @tool
 def wikipedia_tool(query: str) -> str:
-    """Search Wikipedia for encyclopedic, historical, biographical, and general background knowledge."""
+    """Search Wikipedia for encyclopedic, historical, scientific, and general background knowledge."""
     try:
+        res = search_wikipedia(query)
+        if res and not res.startswith("No Wikipedia reference found"):
+            return res
         return str(wikipedia.run(query))
-    except Exception as e:
-        return f"Wikipedia search error: {str(e)}"
+    except Exception:
+        return search_wikipedia(query)
 
 
 @tool
 def arxiv_tool(query: str) -> str:
     """Search arXiv for physics, mathematics, and AI/ML academic preprint papers."""
     try:
-        return str(arxiv.run(query))
-    except Exception as e:
-        return f"ArXiv search error: {str(e)}"
+        res = str(arxiv.run(query))
+        if "No good Arxiv Result was found" in res or "error" in res.lower():
+            return search_academic_papers(query)
+        return res
+    except Exception:
+        return search_academic_papers(query)
 
 
 @tool
@@ -681,8 +688,8 @@ def format_and_clean_answer(raw_answer: str) -> str:
     answer = re.sub(r"\*\*\s+([^\*\n]+?)\s+\*\*", r"**\1**", answer)
     answer = re.sub(r"\*\*\s+([^\*\n]+?)\*\*", r"**\1**", answer)
     answer = re.sub(r"\*\*([^\*\n]+?)\s+\*\*", r"**\1**", answer)
-    answer = re.sub(r"(\w)\*\*", r"\1 **", answer)
-    answer = re.sub(r"\*\*(\w)", r"** \1", answer)
+    answer = re.sub(r'(?<=\w)(\*\*[^*\n]+?\*\*)', r' \1', answer)   # space before span if glued to prior word
+    answer = re.sub(r'(\*\*[^*\n]+?\*\*)(?=\w)', r'\1 ', answer)     # space after span if glued to next word
     answer = re.sub(r"(?<!\\)\$([0-9])", r"\\$\1", answer)
     return answer
 
