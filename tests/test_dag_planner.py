@@ -82,10 +82,8 @@ def test_build_dag_empty_raises():
 def test_create_dag_fast_mode():
     planner = DAGPlanner(llm=None)
     dag = planner.create_dag("Fast query test", mode="fast")
-    assert len(dag.nodes) == 2
-    assert "node_1" in dag.nodes
-    assert "node_2" in dag.nodes
-    assert dag.nodes["node_2"].dependencies == ["node_1"]
+    assert len(dag.nodes) == 0
+    assert dag.is_complete() is True
 
 
 def test_create_dag_fallback_on_llm_error():

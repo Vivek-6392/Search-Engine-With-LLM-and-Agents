@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -44,6 +45,15 @@ from dag import (
 )
 from browser import browse_webpage, is_safe_url
 import chat_store
+from metrics import (
+    MetricsCollector,
+    get_current_metrics,
+    set_current_metrics,
+    log_event,
+    MetricsCallbackHandler,
+)
+from budget import QueryBudget, load_budget_config, get_current_budget
+from evidence import EvidenceStore, build_research_packet
 from utils.tools import (
     search_github,
     search_finance,
@@ -102,7 +112,6 @@ def get_groq_models(api_key: str) -> list[str]:
             "tts",
             "guard",
             "orpheus",
-            "compound",
         ]
         active_models = [
             m.id
@@ -354,6 +363,12 @@ with st.sidebar:
             value=5,
         )
 
+        use_llm_titling = st.checkbox(
+            "Use LLM for Chat Titling",
+            value=False,
+            help="Default is False (uses deterministic 0-call titling to save tokens & latency).",
+        )
+
 
 # --------------------------------------------------
 # LLM Initialization
@@ -430,17 +445,15 @@ def ddgs_search(query: str) -> str:
     return "\n".join(formatted_results)
 
 
+from utils.search_pipeline import search_and_extract_evidence
+
+
 def web_search(query: str) -> str:
-    """Search strategy: Try Tavily first, fallback to DDGS."""
-    try:
-        result = tavily_search(query)
-        return "SEARCH PROVIDER: TAVILY\n\n" + result
-    except Exception as tavily_error:
-        try:
-            fallback_result = ddgs_search(query)
-            return f"SEARCH PROVIDER: DDGS FALLBACK\n\nTavily error: {str(tavily_error)}\n\n" + fallback_result
-        except Exception as ddgs_error:
-            return f"SEARCH FAILED\n\nTavily error: {str(tavily_error)}\n\nDDGS error: {str(ddgs_error)}"
+    """Optimized web search with deduplication, ranking, and compact evidence extraction."""
+    evidence_list = search_and_extract_evidence(query=query, max_results=3)
+    if not evidence_list:
+        return f"No verified web results found for query: '{query.strip()}'"
+    return "\n\n".join([ev.to_markdown() for ev in evidence_list])
 
 
 wikipedia = WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())
@@ -580,79 +593,182 @@ executor = DAGExecutor(llm=llm, tools=tools, max_workers=max_dag_workers)
 # Multi-Chat Helpers (Titling, Rolling Memory, Formatting)
 # --------------------------------------------------
 
-def generate_chat_title(llm_instance, query_text: str) -> str:
-    """Generate a concise 4-6 word title summarizing the user query."""
-    fallback_title = query_text.strip()[:40].strip()
-    if len(query_text.strip()) > 40:
-        fallback_title += "..."
+def generate_deterministic_title(query_text: str, max_words: int = 10) -> str:
+    """
+    Generate a clean 6-10 word title deterministically with ZERO LLM calls:
+    - Extracts first meaningful sentence/clause
+    - Strips noisy prefixes ('what is', 'can you tell me about', 'compare', etc.)
+    - Removes punctuation and markdown
+    - Truncates to max_words
+    """
+    if not query_text or not query_text.strip():
+        return "New Research"
 
-    prompt = (
-        f"Generate a concise 4 to 6 word title summarizing this research query. "
-        f"Return ONLY the title text without quotes, markdown, or punctuation.\n\n"
-        f"Query: {query_text}"
-    )
+    text = query_text.strip()
+    text = re.sub(r"[`\"'#\*\-_]", "", text)
+    sentences = re.split(r"[.!?\n]", text)
+    first_sent = sentences[0].strip() if sentences else text
+
+    filler_patterns = [
+        r"^(?:can\s+you\s+|could\s+you\s+|please\s+)*(?:tell\s+me\s+about|explain|what\s+is|what\s+are|how\s+does|how\s+to|search\s+for|look\s+up|find\s+out\s+about|give\s+me|compare)\s*",
+    ]
+    cleaned = first_sent
+    for pat in filler_patterns:
+        cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()
+
+    cleaned = re.sub(r"^(?:the|a|an)\s+", "", cleaned, flags=re.IGNORECASE).strip()
+
+    if not cleaned:
+        cleaned = first_sent
+
+    words = cleaned.split()
+    if len(words) > max_words:
+        cleaned = " ".join(words[:max_words])
+
+    if cleaned.islower():
+        cleaned = cleaned.title()
+    elif len(cleaned) > 0:
+        cleaned = cleaned[0].upper() + cleaned[1:]
+
+    return cleaned[:50].strip() or "New Research"
+
+
+def generate_chat_title(llm_instance, query_text: str, use_llm: bool = False) -> str:
+    """Generate a clean title. Uses deterministic titling (0 LLM calls) by default."""
+    if not use_llm or llm_instance is None:
+        return generate_deterministic_title(query_text)
+
     try:
+        prompt = (
+            f"Generate a concise 4 to 6 word title summarizing this research query. "
+            f"Return ONLY the title text without quotes, markdown, or punctuation.\n\n"
+            f"Query: {query_text}"
+        )
         resp = llm_instance.invoke(prompt)
         content = resp.content if hasattr(resp, "content") else str(resp)
         title = content.strip().replace('"', "").replace("'", "").replace("\n", " ").strip()
         words = title.split()
         if len(words) > 8:
             title = " ".join(words[:6])
-        return title if len(title) > 2 else fallback_title
+        return title if len(title) > 2 else generate_deterministic_title(query_text)
     except Exception:
-        return fallback_title
+        return generate_deterministic_title(query_text)
 
 
-def build_conversation_context(llm_instance, chat_id: str, db_path: Optional[str] = None) -> str:
-    """Build compact conversation memory for follow-up turns, maintaining rolling summary for > 6 turns."""
+def build_conversation_context(
+    llm_instance,
+    chat_id: str,
+    db_path: Optional[str] = None,
+    use_llm_summary: bool = False,
+    budget: Optional[QueryBudget] = None,
+) -> str:
+    """
+    Build compact conversation memory for follow-up turns:
+    - Zero LLM calls for <= 8 messages (deterministic recent turns).
+    - Uses cached summary if already generated.
+    - Only triggers LLM summarization if messages > 10 turns AND use_llm_summary is True AND budget permits.
+    """
     if not chat_id:
         return ""
     messages = chat_store.get_messages(chat_id, db_path=db_path)
     if not messages:
         return ""
 
-    if len(messages) <= 6:
+    if len(messages) <= 8 or not use_llm_summary:
+        # Deterministic recent context (last 3 turns / 6 messages)
+        recent = messages[-6:]
         lines = []
-        for m in messages:
+        for m in recent:
             role = "User" if m["role"] == "user" else "Assistant"
-            lines.append(f"[{role}]: {m['content']}")
+            text = m["content"].strip()
+            if len(text) > 400:
+                text = text[:400] + "..."
+            lines.append(f"[{role}]: {text}")
         return "\n\n".join(lines)
 
-    # Chat exceeds 6 messages: collapse older turns into rolling summary
-    recent_messages = messages[-4:]  # Last 2 turns (user + assistant)
+    # Chat exceeds 8 messages: check cached summary
+    recent_messages = messages[-4:]
     older_messages = messages[:-4]
 
     cached_summary = chat_store.get_chat_summary(chat_id, db_path=db_path)
 
-    older_text_list = []
-    for m in older_messages:
-        role = "User" if m["role"] == "user" else "Assistant"
-        c_text = m["content"]
-        if len(c_text) > 800:
-            c_text = c_text[:800] + "..."
-        older_text_list.append(f"[{role}]: {c_text}")
-    older_text = "\n\n".join(older_text_list)
+    if not cached_summary and len(messages) > 10 and llm_instance is not None:
+        bg = budget or get_current_budget()
+        can_call = (bg.can_call_llm() and not bg.should_skip_optional_work()) if bg else True
+        if can_call:
+            older_text_list = []
+            for m in older_messages:
+                role = "User" if m["role"] == "user" else "Assistant"
+                c_text = m["content"][:400]
+                older_text_list.append(f"[{role}]: {c_text}")
+            older_text = "\n\n".join(older_text_list)
 
-    if not cached_summary:
-        summary_prompt = (
-            "Summarize the key facts, research findings, and entities discussed in this prior research context into a concise summary:\n\n"
-            f"{older_text}\n\n"
-            "Summary:"
-        )
-        try:
-            resp = llm_instance.invoke(summary_prompt)
-            cached_summary = resp.content if hasattr(resp, "content") else str(resp)
-            chat_store.update_chat_summary(chat_id, cached_summary, db_path=db_path)
-        except Exception:
-            cached_summary = older_text[:1000]
+            summary_prompt = (
+                "Summarize the key facts, research findings, and entities discussed in this prior research context into a concise summary:\n\n"
+                f"{older_text}\n\n"
+                "Summary:"
+            )
+            try:
+                if bg:
+                    bg.reserve("llm")
+                resp = llm_instance.invoke(summary_prompt)
+                cached_summary = resp.content if hasattr(resp, "content") else str(resp)
+                chat_store.update_chat_summary(chat_id, cached_summary, db_path=db_path)
+                if bg:
+                    bg.record_usage(llm_calls=1, input_tokens=max(1, len(summary_prompt) // 4), output_tokens=max(1, len(cached_summary) // 4))
+            except Exception:
+                cached_summary = ""
 
     recent_text_list = []
     for m in recent_messages:
         role = "User" if m["role"] == "user" else "Assistant"
-        recent_text_list.append(f"[{role}]: {m['content']}")
+        recent_text_list.append(f"[{role}]: {m['content'][:400]}")
     recent_text = "\n\n".join(recent_text_list)
 
-    return f"Rolling Summary of Earlier Research:\n{cached_summary}\n\nRecent Turns:\n{recent_text}"
+    if cached_summary:
+        return f"Rolling Summary of Earlier Research:\n{cached_summary}\n\nRecent Turns:\n{recent_text}"
+    return recent_text
+
+
+def render_live_budget_meter_hud(budget_instance, collector_instance, container):
+    """Render a live, interactive execution telemetry HUD with progress meters."""
+    if not budget_instance:
+        return
+
+    cfg = budget_instance.config
+    col_m = collector_instance.metrics if collector_instance else None
+
+    tok_used = getattr(budget_instance, "total_tokens_used", 0)
+    tok_max = cfg.max_total_tokens
+    tok_pct = min(1.0, tok_used / tok_max) if tok_max else 0.0
+
+    llm_used = getattr(budget_instance, "llm_calls_used", 0)
+    llm_max = cfg.max_llm_calls
+
+    tool_used = getattr(budget_instance, "tool_calls_used", 0)
+    tool_max = cfg.max_tool_calls
+
+    start_t = getattr(budget_instance, "_start_time", None)
+    elapsed = round(time.perf_counter() - start_t, 1) if start_t else 0.0
+    rem_time = round(budget_instance.remaining_time(), 1)
+
+    browser_used = getattr(budget_instance, "browser_calls_used", 0)
+    retries = col_m.retries if col_m else 0
+    skipped = col_m.skipped_nodes if col_m else 0
+
+    with container:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("🛡️ Token Budget", f"{tok_used:,} / {tok_max:,}", f"{tok_pct:.0%}")
+        with col2:
+            st.metric("🤖 LLM Calls", f"{llm_used} / {llm_max}")
+        with col3:
+            st.metric("🔧 Tools", f"{tool_used} / {tool_max}")
+        with col4:
+            st.metric("⏱️ Elapsed", f"{elapsed:.1f}s", f"Left: {rem_time:.0f}s")
+
+        if retries or skipped or browser_used:
+            st.caption(f"⚡ Browser: `{browser_used}` | ⏱️ Retries: `{retries}` | ⇥ Skipped: `{skipped}`")
 
 
 def format_and_clean_answer(raw_answer: str) -> str:
@@ -692,6 +808,117 @@ def format_and_clean_answer(raw_answer: str) -> str:
     answer = re.sub(r'(\*\*[^*\n]+?\*\*)(?=\w)', r'\1 ', answer)     # space after span if glued to next word
     answer = re.sub(r"(?<!\\)\$([0-9])", r"\\$\1", answer)
     return answer
+
+
+def render_developer_debug_section(metrics_data: dict, key_suffix: str = ""):
+    """Render a comprehensive developer/debug panel in Streamlit for request tracing & performance."""
+    if not metrics_data:
+        return
+
+    with st.expander("🛠️ Developer / Debug Performance & Tracing Metrics", expanded=False):
+        # 1. Summary Cards
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        with col1:
+            tot_lat = metrics_data.get("total_latency", 0.0)
+            st.metric("⏱️ Total Latency", f"{tot_lat:.2f}s", help="End-to-end request duration")
+        with col2:
+            llm_calls = metrics_data.get("llm_call_count", 0)
+            st.metric("🤖 LLM Calls", f"{llm_calls}", help="Total LLM invocations across planner, nodes, and synthesis")
+        with col3:
+            tot_tok = metrics_data.get("total_tokens", 0)
+            in_tok = metrics_data.get("input_tokens", 0)
+            out_tok = metrics_data.get("output_tokens", 0)
+            st.metric("🧮 Total Tokens", f"{tot_tok:,}", f"In: {in_tok:,} | Out: {out_tok:,}", help="Prompt and completion tokens")
+        with col4:
+            tool_calls = metrics_data.get("tool_call_count", 0)
+            st.metric("🛠️ Tool Calls", f"{tool_calls}", help="Total tool executions across DAG nodes")
+        with col5:
+            b_calls = metrics_data.get("browser_calls", 0)
+            pw_calls = metrics_data.get("playwright_calls", 0)
+            http_calls = metrics_data.get("http_fetch_calls", 0)
+            st.metric("🌐 Browser Calls", f"{b_calls}", f"HTTP: {http_calls} | PW: {pw_calls}", help="Webpage extractions (Fast HTTP vs Playwright)")
+        with col6:
+            retries = metrics_data.get("retries", 0)
+            rate_limits = metrics_data.get("rate_limit_errors", 0)
+            st.metric("🔁 Retries / 429s", f"{retries} / {rate_limits}", help="Retried attempts and 429 Rate-limit errors encountered")
+
+        st.divider()
+
+        # QueryBudget Status Banner
+        budget_st = metrics_data.get("budget_status", {})
+        if budget_st:
+            is_ex = metrics_data.get("budget_exhausted", False)
+            badge = "⚠️ EXHAUSTED" if is_ex else "✅ OK"
+            reasons = ", ".join(budget_st.get("exhaustion_reasons", [])) or "None"
+            st.info(
+                f"🛡️ **Query Budget:** `{badge}` | **LLM Calls:** `{budget_st.get('llm_calls')}` | "
+                f"**Tokens:** `{budget_st.get('total_tokens')}` | "
+                f"**Time Remaining:** `{budget_st.get('remaining_time_seconds')}s` | "
+                f"**Exhaustion Reason:** `{reasons}`"
+            )
+
+        # 2. Latency & Node Breakdown
+        col_l1, col_l2, col_l3 = st.columns(3)
+        with col_l1:
+            st.caption(f"🧠 **Planner Latency:** `{metrics_data.get('planner_latency', 0.0):.3f}s`")
+        with col_l2:
+            st.caption(f"✍️ **Synthesis Latency:** `{metrics_data.get('final_synthesis_latency', 0.0):.3f}s`")
+        with col_l3:
+            dag_count = metrics_data.get("dag_node_count", 0)
+            done_nodes = metrics_data.get("completed_nodes", 0)
+            failed_nodes = metrics_data.get("failed_nodes", 0)
+            st.caption(f"📊 **DAG Nodes:** `{done_nodes}/{dag_count} completed` (Failed: `{failed_nodes}`)")
+
+        # Tool Names
+        tool_names = metrics_data.get("tool_names", [])
+        if tool_names:
+            st.caption(f"**Tools Used:** `{', '.join(tool_names)}`")
+
+        # 3. DAG Node Stats Table
+        per_node = metrics_data.get("per_node_latency", {})
+        if per_node:
+            st.markdown("##### 🧩 DAG Node Stats")
+            node_table_rows = []
+            for nid, ndata in per_node.items():
+                node_table_rows.append({
+                    "Node": nid,
+                    "Status": ndata.get("status", "N/A"),
+                    "Latency (s)": f"{ndata.get('latency_seconds', 0.0):.3f}",
+                    "Tool Used": ndata.get("tool_used", "direct"),
+                    "Error": ndata.get("error") or "None",
+                })
+            st.dataframe(node_table_rows, use_container_width=True)
+
+        # 4. Context Size & LLM Calls table
+        ctx_list = metrics_data.get("context_size_per_llm_call", [])
+        if ctx_list:
+            st.markdown("##### 🔍 LLM Call Context & Token Breakdown")
+            ctx_table_rows = []
+            for ctx in ctx_list:
+                ctx_table_rows.append({
+                    "Call #": ctx.get("call_index"),
+                    "Stage": ctx.get("stage"),
+                    "Prompt Chars": f"{ctx.get('chars', 0):,}",
+                    "Est/Actual In Tokens": f"{ctx.get('input_tokens', 0):,}",
+                    "Out Tokens": f"{ctx.get('output_tokens', 0):,}",
+                    "Latency (s)": f"{ctx.get('latency_seconds', 0.0):.3f}",
+                    "Model": ctx.get("model", ""),
+                })
+            st.dataframe(ctx_table_rows, use_container_width=True)
+
+        # 5. Retries & Rate Limits breakdown
+        retry_list = metrics_data.get("retry_details", [])
+        if retry_list:
+            st.markdown("##### ⏱️ Retries & Rate Limits Details")
+            retry_rows = []
+            for r in retry_list:
+                retry_rows.append({
+                    "Stage": r.get("stage"),
+                    "Error Type": r.get("error_type", "rate_limit"),
+                    "Wait (s)": f"{r.get('wait_duration_seconds', 0.0):.2f}",
+                    "Reason / Details": r.get("reason", "")[:120],
+                })
+            st.dataframe(retry_rows, use_container_width=True)
 
 
 # --------------------------------------------------
@@ -774,6 +1001,9 @@ else:
                                 if node.get("error"):
                                     st.error(f"Error: {node['error']}")
                                 st.divider()
+
+                    if snapshot_data.get("metrics"):
+                        render_developer_debug_section(snapshot_data["metrics"], key_suffix=f"hist_{msg['id']}")
                 except Exception:
                     pass
 
@@ -788,6 +1018,24 @@ if user_query:
     user_text = user_query.strip()
     if not user_text:
         st.stop()
+
+    # Initialize request metrics collector & query budget
+    collector = MetricsCollector(
+        research_mode=mode_key,
+        model_provider=f"{provider} / {model_name}",
+    )
+    collector.start()
+    budget = QueryBudget(mode=mode_key)
+    budget.start()
+
+    log_event(
+        "request_started",
+        request_id=collector.metrics.request_id,
+        query=user_text,
+        mode=mode_key,
+        provider=provider,
+        model=model_name,
+    )
 
     is_first_turn = False
     if not current_chat_id:
@@ -813,6 +1061,7 @@ if user_query:
 
         with col_dag_canvas:
             st.markdown("### 🧠 Research DAG Flow")
+            hud_container = st.container()
             progress_container = st.empty()
             dag_graph_container = st.empty()
 
@@ -822,19 +1071,30 @@ if user_query:
         # Step A: Create DAG with prior context
         with col_dag_canvas:
             with st.spinner("Planning research graph..."):
-                dag = planner.create_dag(user_text, mode=mode_key, context=chat_context)
+                dag = planner.create_dag(
+                    user_text,
+                    mode=mode_key,
+                    context=chat_context,
+                    metrics=collector,
+                    budget=budget,
+                )
 
         # Step B: Render initial DAG graph
         node_statuses = {node_id: "PENDING" for node_id in dag.nodes}
 
         def render_progress():
             total = len(node_statuses)
-            done = sum(1 for s in node_statuses.values() if s in ("COMPLETED", "FAILED"))
+            done = sum(1 for s in node_statuses.values() if s in ("COMPLETED", "FAILED", "SKIPPED"))
+            render_live_budget_meter_hud(budget, collector, hud_container)
             with progress_container:
                 st.caption(f"{done} of {total} nodes complete")
                 st.progress(done / total if total else 0.0)
 
         def render_dag():
+            if not dag.nodes:
+                with dag_graph_container:
+                    st.info("⚡ **Direct Fast Mode Execution:** DAG bypassed for minimum latency.")
+                return
             html_code = render_dag_graph(dag, node_statuses)
             if hasattr(dag_graph_container, "html"):
                 dag_graph_container.html(html_code)
@@ -856,15 +1116,26 @@ if user_query:
             render_progress()
             render_dag()
 
-        # Step C: Execute DAG
-        with st.spinner(f"Executing DAG with {max_dag_workers} parallel workers..."):
-            dag = executor.execute(dag, progress_callback=update_progress)
+        # Step C: Execute DAG (if nodes exist)
+        if dag.nodes:
+            with st.spinner(f"Executing DAG with {max_dag_workers} parallel workers..."):
+                dag = executor.execute(
+                    dag,
+                    progress_callback=update_progress,
+                    metrics=collector,
+                    budget=budget,
+                )
 
-        # Step D: Synthesis
+        # Step D: Structured EvidenceStore & ResearchPacket Compilation
         results = dag.get_results()
-        combined_results = "\n\n".join(
-            [f"### {node_id}\n\n{result}" for node_id, result in results.items()]
-        )
+        if results:
+            evidence_store = EvidenceStore()
+            for node_id, result in results.items():
+                evidence_store.add_from_raw(result, node_id=node_id)
+            research_packet = build_research_packet(question=user_text, store=evidence_store)
+            combined_results = research_packet.to_markdown()
+        else:
+            combined_results = "Direct answer query without intermediate DAG nodes."
 
         if mode_key == "fast":
             length_guideline = "- **Concise & Direct**: Keep your answer crisp, clear, and to the point (1-3 focused paragraphs or succinct key points)."
@@ -911,9 +1182,11 @@ Formatting & Presentation Guidelines:
             "2. Output ONLY direct, fluent Markdown text with clean Markdown tables (`| ... |`)."
         )
 
+        synth_prompt_chars = len(synth_system_prompt) + len(final_prompt)
         with report_status_container:
             with st.spinner("Synthesizing final research report..."):
                 final_response = None
+                synth_start = time.perf_counter()
                 try:
                     final_response = llm.invoke(
                         [
@@ -935,6 +1208,26 @@ Formatting & Presentation Guidelines:
                             f"### Research Findings\n\n{combined_results}\n\n"
                             f"> ⚠️ *Note: Final LLM synthesis timed out or encountered an error ({str(fb_err)[:120]}). Displaying raw verified findings above.*"
                         )
+                synth_latency = time.perf_counter() - synth_start
+
+        synth_in_tokens = 0
+        synth_out_tokens = 0
+        if hasattr(final_response, "usage_metadata") and isinstance(final_response.usage_metadata, dict):
+            synth_in_tokens = final_response.usage_metadata.get("input_tokens", 0)
+            synth_out_tokens = final_response.usage_metadata.get("output_tokens", 0)
+        elif hasattr(final_response, "response_metadata") and isinstance(final_response.response_metadata, dict):
+            tu = final_response.response_metadata.get("token_usage", {})
+            if isinstance(tu, dict):
+                synth_in_tokens = tu.get("prompt_tokens", 0)
+                synth_out_tokens = tu.get("completion_tokens", 0)
+
+        collector.record_synthesis(
+            latency=synth_latency,
+            context_chars=synth_prompt_chars,
+            input_tokens=synth_in_tokens,
+            output_tokens=synth_out_tokens,
+            model=model_name,
+        )
 
         if hasattr(final_response, "content"):
             answer = str(final_response.content)
@@ -947,7 +1240,29 @@ Formatting & Presentation Guidelines:
         with col_report_canvas:
             st.markdown(answer)
 
-        # Snapshot DAG execution
+        # Record and finalize budget
+        if budget:
+            budget.record_usage(
+                llm_calls=1,
+                input_tokens=synth_in_tokens or max(1, synth_prompt_chars // 4),
+                output_tokens=synth_out_tokens or max(1, len(answer) // 4),
+            )
+            collector.record_budget(budget.get_status(), is_exhausted=budget.exhausted())
+            budget.finish()
+
+        # Finalize request metrics
+        collector.finish()
+        metrics_dict = collector.to_dict()
+        log_event(
+            "request_completed",
+            request_id=collector.metrics.request_id,
+            total_latency=collector.metrics.total_latency,
+            total_tokens=collector.metrics.total_tokens,
+            tool_calls=collector.metrics.tool_call_count,
+            llm_calls=collector.metrics.llm_call_count,
+        )
+
+        # Snapshot DAG execution & metrics
         dag_snapshot_data = {
             "nodes": [
                 {
@@ -960,7 +1275,8 @@ Formatting & Presentation Guidelines:
                     "dependencies": node.dependencies,
                 }
                 for node in dag.nodes.values()
-            ]
+            ],
+            "metrics": metrics_dict,
         }
         dag_snapshot_json = json.dumps(dag_snapshot_data)
 
@@ -972,9 +1288,9 @@ Formatting & Presentation Guidelines:
             dag_snapshot=dag_snapshot_json,
         )
 
-        # Auto-title on first turn
+        # Auto-title on first turn (deterministic 0-call by default)
         if is_first_turn:
-            new_title = generate_chat_title(llm, user_text)
+            new_title = generate_chat_title(llm, user_text, use_llm=use_llm_titling)
             chat_store.rename_chat(current_chat_id, new_title)
 
         with col_dag_canvas:
@@ -993,5 +1309,7 @@ Formatting & Presentation Guidelines:
                     if node.error:
                         st.error(f"Error: {node.error}")
                     st.divider()
+
+            render_developer_debug_section(metrics_dict, key_suffix="live")
 
     st.rerun()

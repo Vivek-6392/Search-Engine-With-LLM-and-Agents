@@ -32,6 +32,12 @@ STATUS_STYLES = {
         "icon_color": "#EF4444",
         "icon": "\u2715",  # ✕
     },
+    "SKIPPED": {
+        "border": "#64748B",
+        "bg": "rgba(100,116,139,0.08)",
+        "icon_color": "#94A3B8",
+        "icon": "\u21e5",  # ⇥
+    },
 }
 
 

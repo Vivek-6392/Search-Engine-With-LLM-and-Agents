@@ -17,7 +17,7 @@ def test_generate_chat_title_success():
     mock_resp.content = "Quantum Computing Advancements Overview"
     mock_llm.invoke.return_value = mock_resp
 
-    title = generate_chat_title(mock_llm, "What are the latest breakthroughs in quantum computing?")
+    title = generate_chat_title(mock_llm, "What are the latest breakthroughs in quantum computing?", use_llm=True)
     assert title == "Quantum Computing Advancements Overview"
 
 
@@ -26,9 +26,9 @@ def test_generate_chat_title_fallback_on_error():
     mock_llm.invoke.side_effect = Exception("API error")
 
     long_query = "Compare Apple, Microsoft, and Nvidia in terms of current market capitalization and earnings growth"
-    title = generate_chat_title(mock_llm, long_query)
-    assert title.startswith("Compare Apple, Microsoft, and Nvidia in")
-    assert title.endswith("...")
+    title = generate_chat_title(mock_llm, long_query, use_llm=True)
+    assert "Apple" in title
+    assert len(title.split()) <= 10
 
 
 def test_build_conversation_context_short_history(temp_db):
@@ -47,8 +47,8 @@ def test_build_conversation_context_short_history(temp_db):
 def test_build_conversation_context_rolling_summary(temp_db):
     chat_id = chat_store.create_chat(title="Long Chat", db_path=temp_db)
 
-    # Insert 8 messages (4 turns)
-    for i in range(1, 5):
+    # Insert 12 messages (>10 threshold)
+    for i in range(1, 7):
         chat_store.append_message(chat_id, "user", f"Question {i}", db_path=temp_db)
         chat_store.append_message(chat_id, "assistant", f"Answer {i}", db_path=temp_db)
 
@@ -57,11 +57,11 @@ def test_build_conversation_context_rolling_summary(temp_db):
     mock_resp.content = "Summary of Questions 1 and 2 and Answers 1 and 2."
     mock_llm.invoke.return_value = mock_resp
 
-    context = build_conversation_context(mock_llm, chat_id, db_path=temp_db)
+    context = build_conversation_context(mock_llm, chat_id, db_path=temp_db, use_llm_summary=True)
     assert "Rolling Summary of Earlier Research:" in context
     assert "Summary of Questions 1 and 2 and Answers 1 and 2." in context
-    assert "Question 3" in context
-    assert "Question 4" in context
+    assert "Question 5" in context
+    assert "Question 6" in context
     assert "Question 1" not in context  # Question 1 was collapsed into summary
 
     # Verify summary was cached in database
