@@ -111,6 +111,9 @@ Instructions:
         except Exception as e:
             answer = f"Fast synthesis encountered an error: {e}"
 
+    if not answer or not answer.strip():
+        answer = evidence_text or "No direct findings retrieved."
+
     return answer, dag
 
 
@@ -214,6 +217,9 @@ Instructions:
                 bg.record_usage(llm_calls=1, input_tokens=in_tokens, output_tokens=out_tokens)
         except Exception as e:
             answer = f"Synthesis encountered an error: {e}"
+
+    if not answer or not answer.strip():
+        answer = f"### Research Findings\n\n{evidence_text}"
 
     if progress_callback:
         progress_callback("Completed!", 1.0)
@@ -336,6 +342,9 @@ Instructions:
         except Exception as e:
             answer = f"Deep synthesis encountered an error: {e}"
 
+    if not answer or not answer.strip():
+        answer = f"### Deep Research Summary\n\n{evidence_text}"
+
     if progress_callback:
         progress_callback("Completed!", 1.0)
 
@@ -441,6 +450,9 @@ Instructions:
                 bg.record_usage(llm_calls=1, input_tokens=in_tokens, output_tokens=out_tokens)
         except Exception as e:
             answer = f"Academic synthesis encountered an error: {e}"
+
+    if not answer or not answer.strip():
+        answer = f"### Academic Literature Review & Findings\n\n{evidence_text}"
 
     if progress_callback:
         progress_callback("Completed!", 1.0)

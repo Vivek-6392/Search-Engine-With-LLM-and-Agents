@@ -4,11 +4,11 @@
     "query": "What is the square root of 144 plus 25 multiplied by 4?",
     "mode": "fast",
     "metrics": {
-      "request_id": "591f5232-6be6-4868-92f1-a13b1a046ea1",
-      "timestamp": "2026-08-25T18:35:24.573816+00:00",
+      "request_id": "576e727b-efb1-49de-afbf-c0d56a62e6de",
+      "timestamp": "2026-08-26T19:17:52.666405+00:00",
       "research_mode": "fast",
       "selected_model_provider": "Groq / openai/gpt-oss-20b",
-      "total_latency": 5.5468,
+      "total_latency": 0.7695,
       "planner_latency": 0.0,
       "dag_node_count": 0,
       "completed_nodes": 0,
@@ -17,30 +17,30 @@
       "per_node_latency": {},
       "tool_call_count": 1,
       "tool_names": [
-        "wikipedia_tool"
+        "calculator_tool"
       ],
       "browser_calls": 0,
       "playwright_calls": 0,
       "http_fetch_calls": 0,
       "llm_call_count": 1,
-      "input_tokens": 355,
-      "output_tokens": 24,
-      "total_tokens": 379,
+      "input_tokens": 122,
+      "output_tokens": 6,
+      "total_tokens": 128,
       "retries": 0,
       "rate_limit_errors": 0,
       "retry_details": [],
-      "final_synthesis_latency": 0.8222,
+      "final_synthesis_latency": 0.7471,
       "context_size_per_llm_call": [
         {
           "call_index": 1,
           "stage": "final_synthesis",
-          "chars": 1420,
-          "estimated_tokens": 355,
-          "input_tokens": 355,
-          "output_tokens": 24,
-          "total_tokens": 379,
+          "chars": 491,
+          "estimated_tokens": 122,
+          "input_tokens": 122,
+          "output_tokens": 6,
+          "total_tokens": 128,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 0.8222
+          "latency_seconds": 0.7471
         }
       ],
       "budget_exhausted": false,
@@ -48,34 +48,34 @@
       "error": null
     },
     "sources_count": 0,
-    "answer_chars": 96,
-    "answer_preview": "- \\(\\sqrt{144} = 12\\)  \n- \\(25 \\times 4 = 100\\)  \n- \\(12 + 100 = 112\\)\n\nSo the value is **112**."
+    "answer_chars": 24,
+    "answer_preview": "The result is **112.0**."
   },
   {
     "label": "2. Current Factual Question",
     "query": "What is the current stock price and market cap of Apple (AAPL) and Microsoft (MSFT)?",
     "mode": "normal",
     "metrics": {
-      "request_id": "cdf633b5-73af-4155-ae89-69c602db43bf",
-      "timestamp": "2026-08-25T18:35:33.121257+00:00",
+      "request_id": "bf8ef14d-89f7-45f4-8219-4ae3b97916a1",
+      "timestamp": "2026-08-26T19:17:56.436704+00:00",
       "research_mode": "normal",
       "selected_model_provider": "Groq / openai/gpt-oss-20b",
-      "total_latency": 3.3731,
-      "planner_latency": 0.6678,
+      "total_latency": 3.6944,
+      "planner_latency": 0.7983,
       "dag_node_count": 2,
       "completed_nodes": 2,
       "failed_nodes": 0,
       "skipped_nodes": 0,
       "per_node_latency": {
         "node_1": {
-          "latency_seconds": 1.2135,
+          "latency_seconds": 1.1086,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
           "task": "Apple AAPL stock price and market cap"
         },
         "node_2": {
-          "latency_seconds": 1.2107,
+          "latency_seconds": 1.1424,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
@@ -91,13 +91,13 @@
       "playwright_calls": 0,
       "http_fetch_calls": 0,
       "llm_call_count": 2,
-      "input_tokens": 1009,
-      "output_tokens": 739,
-      "total_tokens": 1748,
+      "input_tokens": 1023,
+      "output_tokens": 778,
+      "total_tokens": 1801,
       "retries": 0,
       "rate_limit_errors": 0,
       "retry_details": [],
-      "final_synthesis_latency": 1.4751,
+      "final_synthesis_latency": 1.7341,
       "context_size_per_llm_call": [
         {
           "call_index": 1,
@@ -108,18 +108,18 @@
           "output_tokens": 243,
           "total_tokens": 784,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 0.6675
+          "latency_seconds": 0.7978
         },
         {
           "call_index": 2,
           "stage": "final_synthesis",
-          "chars": 1875,
-          "estimated_tokens": 468,
-          "input_tokens": 468,
-          "output_tokens": 496,
-          "total_tokens": 964,
+          "chars": 1930,
+          "estimated_tokens": 482,
+          "input_tokens": 482,
+          "output_tokens": 535,
+          "total_tokens": 1017,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 1.4751
+          "latency_seconds": 1.7341
         }
       ],
       "budget_exhausted": false,
@@ -127,41 +127,41 @@
       "error": null
     },
     "sources_count": 2,
-    "answer_chars": 1984,
-    "answer_preview": "**Apple (AAPL) & Microsoft (MSFT) \u2013 Current Market Snapshot**  \n*(All figures are the most recent closing values available on the day of writing \u2013 25\u202fAug\u202f2026. Prices and market caps fluctuate with each trade, so please verify with a live data feed for the latest numbers.)*\n\n| Ticker | Closing Price..."
+    "answer_chars": 2142,
+    "answer_preview": "**Current Market Snapshot (as of\u202f26\u202fAug\u202f2026)**  \n\n| Company | Ticker | Stock Price (USD) | Market Capitalization (USD) |\n|---------|--------|-------------------|-----------------------------|\n| Apple Inc. | AAPL | **\u2248\u202f$170.00** | **\u2248\u202f$2.8\u202ftrillion** |\n| Microsoft Corp. | MSFT | **\u2248\u202f$350.00** | **\u2248\u202f..."
   },
   {
     "label": "3. Comparison Question",
     "query": "Compare the architecture, parameters, context window, and benchmark performance of Llama 3, Mistral Large, and Claude 3.5 Sonnet",
     "mode": "normal",
     "metrics": {
-      "request_id": "4c555d1c-85df-41aa-855c-c004a9ffc079",
-      "timestamp": "2026-08-25T18:35:39.495497+00:00",
+      "request_id": "cd2bc587-cab6-4eef-88a3-a76ada255fc4",
+      "timestamp": "2026-08-26T19:18:03.131583+00:00",
       "research_mode": "normal",
       "selected_model_provider": "Groq / openai/gpt-oss-20b",
-      "total_latency": 5.2105,
-      "planner_latency": 0.6326,
+      "total_latency": 5.6687,
+      "planner_latency": 0.9512,
       "dag_node_count": 3,
       "completed_nodes": 3,
       "failed_nodes": 0,
       "skipped_nodes": 0,
       "per_node_latency": {
         "node_1": {
-          "latency_seconds": 1.3184,
+          "latency_seconds": 1.3221,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
           "task": "Llama 3 architecture parameters context window benchmark performance"
         },
         "node_2": {
-          "latency_seconds": 1.2702,
+          "latency_seconds": 1.3208,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
           "task": "Mistral Large architecture parameters context window benchmark performance"
         },
         "node_3": {
-          "latency_seconds": 1.3151,
+          "latency_seconds": 1.8751,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
@@ -178,13 +178,13 @@
       "playwright_calls": 0,
       "http_fetch_calls": 0,
       "llm_call_count": 2,
-      "input_tokens": 1225,
-      "output_tokens": 412,
-      "total_tokens": 1637,
+      "input_tokens": 1251,
+      "output_tokens": 1396,
+      "total_tokens": 2647,
       "retries": 0,
       "rate_limit_errors": 0,
       "retry_details": [],
-      "final_synthesis_latency": 3.2444,
+      "final_synthesis_latency": 2.8242,
       "context_size_per_llm_call": [
         {
           "call_index": 1,
@@ -192,21 +192,21 @@
           "chars": 2077,
           "estimated_tokens": 519,
           "input_tokens": 552,
-          "output_tokens": 411,
-          "total_tokens": 963,
+          "output_tokens": 472,
+          "total_tokens": 1024,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 0.6324
+          "latency_seconds": 0.951
         },
         {
           "call_index": 2,
           "stage": "final_synthesis",
-          "chars": 2693,
-          "estimated_tokens": 673,
-          "input_tokens": 673,
-          "output_tokens": 1,
-          "total_tokens": 674,
+          "chars": 2798,
+          "estimated_tokens": 699,
+          "input_tokens": 699,
+          "output_tokens": 924,
+          "total_tokens": 1623,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 3.2444
+          "latency_seconds": 2.8242
         }
       ],
       "budget_exhausted": false,
@@ -214,34 +214,34 @@
       "error": null
     },
     "sources_count": 3,
-    "answer_chars": 0,
-    "answer_preview": ""
+    "answer_chars": 3696,
+    "answer_preview": "## Quick\u2011look comparison\n\n| Model | Architecture | Parameters | Context window | Benchmark highlights |\n|-------|--------------|------------|----------------|----------------------|\n| **Llama\u202f3** | Vanilla transformer (rotary\u2011positional embeddings, flash\u2011attention, 32\u2011bit FP) | 8\u202fB / 70\u202fB / 405\u202fB | ..."
   },
   {
     "label": "4. Deep Technical Research Question",
     "query": "Analyze the mechanisms and optimizations of FlashAttention-2 vs FlashAttention-3 GPU kernels and memory access patterns",
     "mode": "deep",
     "metrics": {
-      "request_id": "115c0ad0-4981-4085-ba5d-5259e57fcea5",
-      "timestamp": "2026-08-25T18:35:47.707032+00:00",
+      "request_id": "1b600aa2-37a9-4d71-be9d-53c43caf08f2",
+      "timestamp": "2026-08-26T19:18:11.800995+00:00",
       "research_mode": "deep",
       "selected_model_provider": "Groq / openai/gpt-oss-20b",
-      "total_latency": 5.7813,
-      "planner_latency": 1.0481,
+      "total_latency": 7.5828,
+      "planner_latency": 1.1171,
       "dag_node_count": 2,
       "completed_nodes": 2,
       "failed_nodes": 0,
       "skipped_nodes": 0,
       "per_node_latency": {
         "node_1": {
-          "latency_seconds": 1.0363,
+          "latency_seconds": 3.6794,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
           "task": "FlashAttention-2 GPU kernel optimization memory access patterns"
         },
         "node_2": {
-          "latency_seconds": 1.0425,
+          "latency_seconds": 2.3837,
           "status": "COMPLETED",
           "tool_used": "web_search",
           "error": null,
@@ -257,13 +257,13 @@
       "playwright_calls": 0,
       "http_fetch_calls": 0,
       "llm_call_count": 2,
-      "input_tokens": 1352,
-      "output_tokens": 1370,
-      "total_tokens": 2722,
+      "input_tokens": 1423,
+      "output_tokens": 2246,
+      "total_tokens": 3669,
       "retries": 0,
       "rate_limit_errors": 0,
       "retry_details": [],
-      "final_synthesis_latency": 3.681,
+      "final_synthesis_latency": 2.7775,
       "context_size_per_llm_call": [
         {
           "call_index": 1,
@@ -271,21 +271,21 @@
           "chars": 2138,
           "estimated_tokens": 534,
           "input_tokens": 565,
-          "output_tokens": 467,
-          "total_tokens": 1032,
+          "output_tokens": 454,
+          "total_tokens": 1019,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 1.0479
+          "latency_seconds": 1.1169
         },
         {
           "call_index": 2,
           "stage": "final_synthesis",
-          "chars": 3151,
-          "estimated_tokens": 787,
-          "input_tokens": 787,
-          "output_tokens": 903,
-          "total_tokens": 1690,
+          "chars": 3435,
+          "estimated_tokens": 858,
+          "input_tokens": 858,
+          "output_tokens": 1792,
+          "total_tokens": 2650,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 3.681
+          "latency_seconds": 2.7775
         }
       ],
       "budget_exhausted": false,
@@ -293,56 +293,56 @@
       "error": null
     },
     "sources_count": 2,
-    "answer_chars": 3614,
-    "answer_preview": "# Executive Summary  \n\n| Feature | FlashAttention\u20112 | FlashAttention\u20113 |\n|---------|------------------|------------------|\n| **Kernel design** | Two\u2011stage: (1) Q\u00d7K\u1d40 + softmax, (2) result \u00d7 V | Single\u2011fused kernel that performs Q\u00d7K\u1d40, softmax, and V\u2011multiplication in one pass |\n| **Memory layout** | R..."
+    "answer_chars": 7168,
+    "answer_preview": "# Executive Summary  \n\n| Item | FlashAttention\u20112 | FlashAttention\u20113 |\n|------|------------------|------------------|\n| **Core Idea** | Reduce memory traffic by computing soft\u2011max and weighted sum in a single pass over the query\u2011key\u2011value tiles. | Same core idea, but with *fused* soft\u2011max, *tensor\u2011co..."
   },
   {
     "label": "5. Academic Research Question",
     "query": "Survey recent arXiv and PubMed advances in diffusion models for biomedical image segmentation",
     "mode": "academic",
     "metrics": {
-      "request_id": "1f9d7f20-1497-474a-a276-6cbc3c1358fa",
-      "timestamp": "2026-08-25T18:35:56.489034+00:00",
+      "request_id": "023ff8c0-17be-4e0e-9dd0-26037084d0a5",
+      "timestamp": "2026-08-26T19:18:22.384468+00:00",
       "research_mode": "academic",
       "selected_model_provider": "Groq / openai/gpt-oss-20b",
-      "total_latency": 29.0403,
-      "planner_latency": 15.3607,
+      "total_latency": 18.6519,
+      "planner_latency": 5.8246,
       "dag_node_count": 2,
       "completed_nodes": 2,
       "failed_nodes": 0,
       "skipped_nodes": 0,
       "per_node_latency": {
         "node_1": {
-          "latency_seconds": 2.1382,
+          "latency_seconds": 1.2515,
           "status": "COMPLETED",
           "tool_used": "arxiv",
           "error": null,
-          "task": "diffusion models biomedical image segmentation"
+          "task": "diffusion models biomedical image segmentation recent"
         },
         "node_3": {
-          "latency_seconds": 2.7697,
+          "latency_seconds": 1.616,
           "status": "COMPLETED",
-          "tool_used": "web_search",
+          "tool_used": "wikipedia",
           "error": null,
-          "task": "key concepts diffusion models biomedical image segmentation"
+          "task": "diffusion models"
         }
       },
       "tool_call_count": 2,
       "tool_names": [
         "arxiv",
-        "web_search"
+        "wikipedia"
       ],
       "browser_calls": 0,
       "playwright_calls": 0,
       "http_fetch_calls": 0,
       "llm_call_count": 2,
-      "input_tokens": 1546,
-      "output_tokens": 2264,
-      "total_tokens": 3810,
+      "input_tokens": 1062,
+      "output_tokens": 2330,
+      "total_tokens": 3392,
       "retries": 0,
       "rate_limit_errors": 0,
       "retry_details": [],
-      "final_synthesis_latency": 10.9032,
+      "final_synthesis_latency": 11.2067,
       "context_size_per_llm_call": [
         {
           "call_index": 1,
@@ -350,21 +350,21 @@
           "chars": 2019,
           "estimated_tokens": 504,
           "input_tokens": 534,
-          "output_tokens": 499,
-          "total_tokens": 1033,
+          "output_tokens": 959,
+          "total_tokens": 1493,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 15.3605
+          "latency_seconds": 5.8243
         },
         {
           "call_index": 2,
           "stage": "final_synthesis",
-          "chars": 4051,
-          "estimated_tokens": 1012,
-          "input_tokens": 1012,
-          "output_tokens": 1765,
-          "total_tokens": 2777,
+          "chars": 2113,
+          "estimated_tokens": 528,
+          "input_tokens": 528,
+          "output_tokens": 1371,
+          "total_tokens": 1899,
           "model": "Groq / openai/gpt-oss-20b",
-          "latency_seconds": 10.9032
+          "latency_seconds": 11.2067
         }
       ],
       "budget_exhausted": false,
@@ -372,7 +372,7 @@
       "error": null
     },
     "sources_count": 2,
-    "answer_chars": 7062,
-    "answer_preview": "**Survey of Recent arXiv and PubMed Advances in Diffusion Models for Biomedical Image Segmentation**  \n*Senior Academic Researcher & Peer Reviewer \u2013 August\u202f2026*  \n\n---\n\n## 1. Introduction  \n\nBiomedical image segmentation\u2014partitioning an image into clinically relevant anatomical or pathological regi..."
+    "answer_chars": 5487,
+    "answer_preview": "**Survey of Recent arXiv and PubMed Advances in Diffusion Models for Biomedical Image Segmentation**  \n*Senior Academic Researcher & Peer Reviewer \u2013 August\u202f2026*  \n\n---\n\n## 1. Introduction  \n\nDiffusion models (DMs) have emerged as a powerful generative framework that iteratively denoises a latent re..."
   }
 ]

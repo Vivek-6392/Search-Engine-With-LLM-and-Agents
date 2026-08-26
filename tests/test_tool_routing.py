@@ -40,7 +40,9 @@ ALL_15_MOCK_TOOLS = [
 def test_classify_query_tool_groups():
     # Math & Utility
     assert classify_query_tool_group("Calculate the square root of 144") == "UTILITY"
+    assert classify_query_tool_group("What is the square root of 144 plus 25 multiplied by 4?") == "UTILITY"
     assert classify_query_tool_group("Evaluate math expression 50 * 12") == "UTILITY"
+    assert classify_query_tool_group("100 + 200 * 5") == "UTILITY"
 
     # Real-Time (Finance, Forex, Weather)
     assert classify_query_tool_group("What is Apple AAPL stock price and market cap?") == "REAL_TIME"

@@ -13,21 +13,8 @@ from dag.mode_strategies import (
 from dag.planner import DAGPlanner
 from dag.executor import DAGExecutor
 from browser import browse_webpage
-from utils.tools import (
-    search_github,
-    search_finance,
-    search_pubmed,
-    python_calculator,
-    search_huggingface,
-    search_hackernews,
-    search_stackoverflow,
-    search_academic_papers,
-    search_weather,
-    lookup_package,
-    convert_forex,
-    search_wikipedia,
-)
-from app import (
+from utils.langchain_tools import (
+    ALL_RESEARCH_TOOLS,
     web_search_tool,
     wikipedia_tool,
     arxiv_tool,
@@ -58,23 +45,7 @@ llm = ChatGroq(
     temperature=0,
 )
 
-tools = [
-    web_search_tool,
-    wikipedia_tool,
-    arxiv_tool,
-    academic_papers_tool,
-    pubmed_tool,
-    github_search_tool,
-    huggingface_tool,
-    stackoverflow_tool,
-    hackernews_tool,
-    package_lookup_tool,
-    finance_tool,
-    forex_tool,
-    weather_tool,
-    calculator_tool,
-    web_browser_tool,
-]
+tools = ALL_RESEARCH_TOOLS
 
 planner = DAGPlanner(llm=llm)
 executor = DAGExecutor(llm=llm, tools=tools, max_workers=4)

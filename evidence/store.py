@@ -50,7 +50,7 @@ class EvidenceStore:
         """Add a sanitized EvidenceItem to the store."""
         with self._lock:
             clean_claim = _clean_text(item.claim)
-            if not clean_claim or len(clean_claim) < 8:
+            if not clean_claim or len(clean_claim) < 4:
                 return
 
             clean_supp = _clean_text(item.supporting_text)[:250] if item.supporting_text else ""
@@ -78,7 +78,7 @@ class EvidenceStore:
             lines = raw_text.splitlines()
             for line in lines:
                 line_clean = line.strip()
-                if not line_clean or len(line_clean) < 12:
+                if not line_clean or len(line_clean) < 4:
                     continue
 
                 # Ignore tool headers and boilerplate lines
@@ -103,10 +103,28 @@ class EvidenceStore:
                     url = link_match[1]
 
                 cleaned_claim = _clean_text(line_clean)
-                if len(cleaned_claim) >= 12:
-                    # Split into separate sentences if multi-sentence line
+                if not cleaned_claim:
+                    continue
+
+                fallback_title = title or (f"Node {node_id}" if node_id else "Reference")
+
+                # If line is structured key-value data or short fact, preserve as whole claim
+                if len(cleaned_claim) < 140 or ":" in cleaned_claim[:30]:
+                    self.add(
+                        EvidenceItem(
+                            claim=cleaned_claim,
+                            supporting_text=cleaned_claim[:200],
+                            source_url=url,
+                            source_title=fallback_title,
+                            source_type=source_type,
+                            confidence=confidence,
+                            node_id=node_id,
+                        )
+                    )
+                else:
+                    # Long narrative text: split on sentence boundaries
                     sentences = [
-                        s.strip() for s in re.split(r"(?<=[.!?])\s+", cleaned_claim) if len(s.strip()) >= 12
+                        s.strip() for s in re.split(r"(?<=[a-zA-Z0-9][.!?])\s+(?=[A-Z])", cleaned_claim) if len(s.strip()) >= 6
                     ]
                     for sent in sentences:
                         self.add(
@@ -114,7 +132,7 @@ class EvidenceStore:
                                 claim=sent,
                                 supporting_text=cleaned_claim[:200],
                                 source_url=url,
-                                source_title=title or "Web Reference",
+                                source_title=fallback_title,
                                 source_type=source_type,
                                 confidence=confidence,
                                 node_id=node_id,
@@ -177,20 +195,20 @@ class EvidenceStore:
                 filtered.append(item)
             return filtered
 
-    def top_evidence(self, max_items: int = 12) -> List[EvidenceItem]:
-        """Return highest-confidence, diverse evidence items."""
+    def top_evidence(self, max_items: int = 20) -> List[EvidenceItem]:
+        """Return highest-confidence, diverse evidence items across nodes and sources."""
         with self._lock:
             self.deduplicate()
             # Sort by confidence descending
             sorted_items = sorted(self._items, key=lambda x: x.confidence, reverse=True)
-            # Ensure diversity across distinct sources / URLs
+            # Ensure diversity across distinct nodes / URLs
             selected = []
-            seen_urls = defaultdict(int)
+            seen_keys = defaultdict(int)
             for item in sorted_items:
-                url_key = item.source_url or item.source_title
-                if seen_urls[url_key] < 3:
+                key = (item.node_id, item.source_url or item.source_title)
+                if seen_keys[key] < 8:
                     selected.append(item)
-                    seen_urls[url_key] += 1
+                    seen_keys[key] += 1
                 if len(selected) >= max_items:
                     break
             return selected
@@ -200,7 +218,7 @@ class EvidenceStore:
         Compact evidence items to strictly fit within token bounds (<= 1.5K tokens / 6K chars).
         """
         with self._lock:
-            top_items = self.top_evidence(max_items=16)
+            top_items = self.top_evidence(max_items=24)
             compacted = []
             current_chars = 0
 
@@ -214,7 +232,7 @@ class EvidenceStore:
 
             return compacted
 
-    def to_markdown(self, max_items: int = 10) -> str:
+    def to_markdown(self, max_items: int = 12) -> str:
         """Format top evidence items into concise markdown list."""
         with self._lock:
             items = self.compact(max_total_chars=5000)[:max_items]
@@ -232,7 +250,7 @@ def build_research_packet(
     question: str,
     store: EvidenceStore,
     max_sources: int = 6,
-    max_findings: int = 12,
+    max_findings: int = 20,
 ) -> ResearchPacket:
     """
     Compile a structured, token-bounded ResearchPacket directly from an EvidenceStore.

@@ -69,3 +69,10 @@ def test_empty_and_invalid_syntax():
 
     res2 = python_calculator("2 + * 3")
     assert "Calculation Error" in res2
+
+
+def test_natural_language_math_expressions():
+    assert evaluate_math_expression("What is the square root of 144 plus 25 multiplied by 4?") == 112.0
+    assert evaluate_math_expression("Calculate 100 minus 20 divided by 4") == 95.0
+    assert evaluate_math_expression("sqrt of 81 times 2") == 18.0
+    assert "112.0" in python_calculator("What is the square root of 144 plus 25 multiplied by 4?")

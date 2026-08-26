@@ -89,11 +89,15 @@ def classify_query_tool_group(query: str) -> str:
     """
     q = query.lower()
 
-    # 1. Utility (Math / Arithmetic / Formula)
-    if any(k in q for k in ["calculate", "math", "sqrt", "equation", "arithmetic", "+", "*", "divided by", "percentage of"]):
-        # Disambiguate simple addition/multiplication/percentages
-        if any(w in q for w in ["calculate", "sqrt", "math", "sum of", "product of", "evaluate"]):
-            return "UTILITY"
+    # 1. Utility (Math / Arithmetic / Formula / Calculation)
+    math_patterns = [
+        "calculate", "calculator", "math", "sqrt", "square root", "cube root",
+        "equation", "arithmetic", "formula", "multiplied by", "divided by",
+        "plus", "minus", "times", "percentage of", "sum of", "product of",
+        "evaluate", "solve for", "power of", "modulo", "squared", "cubed",
+    ]
+    if any(k in q for k in math_patterns) or re.search(r"\b\d+\s*[\+\-\*\/\^]\s*\d+\b", q):
+        return "UTILITY"
 
     # 2. Real-time (Finance / Crypto / Forex / Weather)
     if any(k in q for k in ["stock", "market cap", "ticker", "nasdaq", "nyse", "share price", "crypto", "bitcoin", "ethereum", "btc", "eth", "forex", "exchange rate", "currency conversion", "weather", "temperature", "forecast", "humidity"]):
